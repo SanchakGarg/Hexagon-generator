@@ -20,24 +20,52 @@
         <p class="sub">fill a wall with panels &amp; nodes</p>
       </header>
 
-      <form class="panel" id="wall-form" onsubmit="return false">
-        <label for="wall-width">width</label>
-        <input id="wall-width" type="number" min="0" step="any" value="4" inputmode="decimal">
-        <label for="wall-height">height</label>
-        <input id="wall-height" type="number" min="0" step="any" value="3" inputmode="decimal">
-        <label for="wall-unit">unit</label>
-        <select id="wall-unit">
-          <option value="mm">mm</option>
-          <option value="cm">cm</option>
-          <option value="m" selected>m</option>
-          <option value="ft">ft</option>
-        </select>
-        <span class="label" id="view-label">view</span>
-        <div class="seg" role="group" aria-labelledby="view-label">
-          <button type="button" id="view-2d" aria-pressed="true">2D</button>
-          <button type="button" id="view-3d" aria-pressed="false" disabled>3D</button>
+      <section class="card" aria-labelledby="wall-title">
+        <h2 id="wall-title">wall</h2>
+        <form class="fields" id="wall-form" onsubmit="return false">
+          <label for="wall-width">width</label>
+          <div class="field">
+            <input id="wall-width" type="number" min="0" step="any" value="4" inputmode="decimal">
+            <span class="suffix" data-unit-label>m</span>
+          </div>
+          <label for="wall-height">height</label>
+          <div class="field">
+            <input id="wall-height" type="number" min="0" step="any" value="3" inputmode="decimal">
+            <span class="suffix" data-unit-label>m</span>
+          </div>
+        </form>
+        <div class="row">
+          <span class="label" id="unit-label">units</span>
+          <div class="seg" role="group" aria-labelledby="unit-label" id="units">
+            <button type="button" data-unit="mm" aria-pressed="false">mm</button>
+            <button type="button" data-unit="m" aria-pressed="true">m</button>
+            <button type="button" data-unit="in" aria-pressed="false">in</button>
+          </div>
         </div>
-      </form>
+        <div class="row">
+          <span class="label" id="view-label">view</span>
+          <div class="seg" role="group" aria-labelledby="view-label">
+            <button type="button" id="view-2d" aria-pressed="true">2D</button>
+            <button type="button" id="view-3d" aria-pressed="false" disabled>3D</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="hex-title">
+        <h2 id="hex-title">hexagons</h2>
+        <p class="help">Click hexagons in the drawing to select them.</p>
+        <h3 class="list-title">selected <span class="count" id="selected-count">0</span></h3>
+        <ul class="chips" id="selected-list" aria-live="polite" data-empty="none selected"></ul>
+        <div class="actions">
+          <button type="button" class="btn primary" id="exclude-btn" disabled>exclude selected</button>
+          <button type="button" class="btn" id="clear-btn" disabled>clear</button>
+        </div>
+        <h3 class="list-title">excluded <span class="count" id="excluded-count">0</span></h3>
+        <ul class="chips" id="excluded-list" aria-live="polite" data-empty="none excluded"></ul>
+        <div class="actions">
+          <button type="button" class="btn" id="restore-btn" disabled>restore all</button>
+        </div>
+      </section>
 
       <section class="counts" aria-label="Parts count">
         <h2>parts count</h2>

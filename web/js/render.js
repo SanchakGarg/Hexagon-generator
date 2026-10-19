@@ -28,7 +28,7 @@ function stripPoints(x1, y1, x2, y2, halfWidth) {
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, lat, formatLength }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -71,9 +71,17 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, lat, formatLength }
   const jointsByHex = new Map(hexes.map((h) => [h.id, []]));
   for (const n of nodes) for (const j of n.joints) jointsByHex.get(j.hexId).push(`${j.hexFrame} → ${n.id}.${j.nodeFrame}`);
 
+  for (const h of excluded) {
+    const tip = `${h.id} · row ${h.row}, col ${h.col}\nexcluded · click to restore`;
+    parts.push(`<g class="hex ghost" data-ghost="${h.id}" data-tip="${esc(tip)}">
+      <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>
+      <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>
+    </g>`);
+  }
+
   for (const h of hexes) {
-    const tip = `${h.id} · row ${h.row}, col ${h.col}\n${jointsByHex.get(h.id).sort().join('\n')}`;
-    parts.push(`<g class="hex" data-tip="${esc(tip)}">
+    const tip = `${h.id} · row ${h.row}, col ${h.col}\nclick to ${selected.has(h.id) ? 'deselect' : 'select'}\n${jointsByHex.get(h.id).sort().join('\n')}`;
+    parts.push(`<g class="hex${selected.has(h.id) ? ' selected' : ''}" data-hex="${h.id}" data-tip="${esc(tip)}">
       <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>
       <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>
     </g>`);

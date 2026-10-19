@@ -193,6 +193,8 @@ export function buildEdges(hexes, nodes, lat) {
   const { r } = lat;
   const hexById = new Map(hexes.map((h) => [h.id, h]));
   const allNodeFrames = Object.keys(lat.nodeAngles).sort();
+  const keyOf = (x, z) => `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
+  const covered = new Set();
   const edges = [];
 
   for (const n of nodes) {
@@ -214,6 +216,11 @@ export function buildEdges(hexes, nodes, lat) {
       if (!pick || score > pick.score) pick = { rotation, edgeFrame, hexFrame, score };
     }
     if (!pick) continue;
+
+    // with hexagons excluded, two edge nodes can face each other across one side; one Edge fills it
+    const side = keyOf(n.x + (lat.R / 2) * Math.cos(rad(open)), n.z + (lat.R / 2) * Math.sin(rad(open)));
+    if (covered.has(side)) continue;
+    covered.add(side);
 
     n.rotation = pick.rotation;
     joint.nodeFrame = pick.hexFrame;

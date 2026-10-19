@@ -2,40 +2,47 @@ import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, buildNodes, buildEdges, summarize } from './layout.js';
 import { renderWall } from './render.js';
 
-const UNITS = { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048 };
-const DECIMALS = { mm: 0, cm: 1, m: 3, ft: 2 };
+const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
+const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
-  '2d': 'scroll to zoom · drag to pan · double-click to reset',
-  '3d': 'drag to orbit · scroll to zoom · right-drag to pan',
+  '2d': 'hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
+  '3d': 'hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
 };
 const MAX_ZOOM = 40;
+const CLICK_SLOP = 4; // px a pointer may move and still count as a click
 
 const $ = (id) => document.getElementById(id);
 const widthIn = $('wall-width');
 const heightIn = $('wall-height');
-const unitIn = $('wall-unit');
+const unitButtons = [...document.querySelectorAll('#units [data-unit]')];
 const viewport = $('viewport');
 const svg = $('stage-svg');
 const tip = $('tooltip');
 const hint = $('hint');
 const btn2d = $('view-2d');
 const btn3d = $('view-3d');
+const excludeBtn = $('exclude-btn');
+const clearBtn = $('clear-btn');
+const restoreBtn = $('restore-btn');
 let geometry = null;
 let lattice = null;
-let currentUnit = unitIn.value;
+let unit = 'm';
 let lastLayout = null;
 let view = '2d';
 let viewer = null;
+
+// hexagons are tracked by grid position, so a selection survives small wall edits
+const keyOf = (h) => `${h.row}:${h.col}`;
+const selected = new Set();
+const excluded = new Set();
+let gridHexes = [];
 
 // 2D zoom state: the overlay's base viewBox, a zoom factor and the visible center, all in SVG units
 let baseBox = null;
 let zoom = { scale: 1, cx: 0, cy: 0 };
 let zoomKey = '';
 
-const formatLength = (m) => {
-  const u = unitIn.value;
-  return `${(m / UNITS[u]).toFixed(DECIMALS[u])} ${u}`;
-};
+const formatLength = (m) => `${(m / UNITS[unit]).toFixed(DECIMALS[unit])} ${unit}`;
 
 function setStat(id, value) {
   $(id).textContent = value;
@@ -55,8 +62,48 @@ function resetZoom() {
   applyViewBox();
 }
 
+function chip(h, label, onRemove) {
+  const li = document.createElement('li');
+  li.className = 'chip';
+  li.title = `row ${h.row}, col ${h.col}`;
+  li.append(h.id);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '×';
+  btn.setAttribute('aria-label', `${label} ${h.id}`);
+  btn.addEventListener('click', onRemove);
+  li.append(btn);
+  return li;
+}
+
+function renderLists() {
+  const sel = gridHexes.filter((h) => selected.has(keyOf(h)));
+  const exc = gridHexes.filter((h) => excluded.has(keyOf(h)));
+  $('selected-list').replaceChildren(
+    ...sel.map((h) =>
+      chip(h, 'Deselect', () => {
+        selected.delete(keyOf(h));
+        update();
+      }),
+    ),
+  );
+  $('excluded-list').replaceChildren(
+    ...exc.map((h) =>
+      chip(h, 'Restore', () => {
+        excluded.delete(keyOf(h));
+        update();
+      }),
+    ),
+  );
+  $('selected-count').textContent = sel.length;
+  $('excluded-count').textContent = exc.length;
+  excludeBtn.disabled = sel.length === 0;
+  clearBtn.disabled = sel.length === 0;
+  restoreBtn.disabled = exc.length === 0;
+}
+
 function update() {
-  const scale = UNITS[unitIn.value];
+  const scale = UNITS[unit];
   const W = parseFloat(widthIn.value) * scale;
   const H = parseFloat(heightIn.value) * scale;
   const note = $('note');
@@ -65,13 +112,19 @@ function update() {
     return;
   }
 
-  const hexes = fitWall(W, H, lattice);
+  gridHexes = fitWall(W, H, lattice);
+  const hexes = gridHexes.filter((h) => !excluded.has(keyOf(h)));
+  const removed = gridHexes.filter((h) => excluded.has(keyOf(h)));
+  for (const key of [...selected]) if (!hexes.some((h) => keyOf(h) === key)) selected.delete(key);
+  const selectedIds = new Set(hexes.filter((h) => selected.has(keyOf(h))).map((h) => h.id));
+
   const nodes = buildNodes(hexes, lattice);
   const edges = buildEdges(hexes, nodes, lattice);
   const s = summarize(W, H, hexes, nodes, lattice, edges);
   lastLayout = { W, H, hexes, nodes, edges, lat: lattice };
-  baseBox = renderWall(svg, { ...lastLayout, formatLength });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
   viewer?.update(lastLayout);
+  viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
   if (key !== zoomKey) {
     zoomKey = key;
@@ -79,6 +132,7 @@ function update() {
   } else {
     applyViewBox();
   }
+  renderLists();
 
   setStat('stat-hex', s.hexagons);
   setStat('stat-nodes', s.nodes);
@@ -90,24 +144,55 @@ function update() {
   setStat('stat-spare', s.spareFrames);
   setStat('stat-coverage', `${(s.coverage * 100).toFixed(1)}%`);
 
-  if (s.hexagons === 0) {
+  if (gridHexes.length === 0) {
     note.textContent = `Wall too small. One hexagon needs at least ${formatLength(2 * lattice.hw)} × ${formatLength(2 * lattice.hh)}.`;
+  } else if (s.hexagons === 0) {
+    note.textContent = 'Every hexagon is excluded. Restore some to build the wall.';
   } else if (s.groups > 1) {
-    note.textContent = `The fill splits into ${s.groups} separate groups. Widen the wall to link the rows.`;
+    note.textContent = `The fill splits into ${s.groups} separate groups. Restore or widen to link them.`;
   } else {
     note.textContent = '';
   }
 }
 
-function convertUnit() {
-  const factor = UNITS[currentUnit] / UNITS[unitIn.value];
+function setUnit(next) {
+  if (next === unit) return;
+  const factor = UNITS[unit] / UNITS[next];
   for (const input of [widthIn, heightIn]) {
     const v = parseFloat(input.value);
-    if (v > 0) input.value = +(v * factor).toFixed(DECIMALS[unitIn.value]);
+    if (v > 0) input.value = +(v * factor).toFixed(DECIMALS[next]);
   }
-  currentUnit = unitIn.value;
+  unit = next;
+  for (const b of unitButtons) b.setAttribute('aria-pressed', String(b.dataset.unit === next));
+  for (const el of document.querySelectorAll('[data-unit-label]')) el.textContent = next;
   update();
 }
+
+for (const b of unitButtons) b.addEventListener('click', () => setUnit(b.dataset.unit));
+
+function toggleSelect(id) {
+  const h = gridHexes.find((g) => g.id === id);
+  if (!h) return;
+  const key = keyOf(h);
+  if (selected.has(key)) selected.delete(key);
+  else selected.add(key);
+  update();
+}
+
+excludeBtn.addEventListener('click', () => {
+  for (const key of selected) excluded.add(key);
+  selected.clear();
+  viewer?.setHover(null);
+  update();
+});
+clearBtn.addEventListener('click', () => {
+  selected.clear();
+  update();
+});
+restoreBtn.addEventListener('click', () => {
+  excluded.clear();
+  update();
+});
 
 function setView(next) {
   view = next;
@@ -117,6 +202,7 @@ function setView(next) {
   tip.hidden = true;
   if (viewer) {
     hint.textContent = HINTS[next];
+    viewer.setHover(null);
     viewer.setMode(next);
   }
 }
@@ -124,7 +210,7 @@ function setView(next) {
 btn2d.addEventListener('click', () => setView('2d'));
 btn3d.addEventListener('click', () => setView('3d'));
 
-// --- 2D tooltips, zoom and pan ---------------------------------------------
+// --- 2D: tooltips, hover, click, zoom and pan --------------------------------
 
 function svgPoint(e) {
   const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
@@ -148,12 +234,28 @@ svg.addEventListener(
 let drag = null;
 svg.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || !baseBox) return;
-  drag = { x: e.clientX, y: e.clientY, cx: zoom.cx, cy: zoom.cy, unitsPerPx: 1 / svg.getScreenCTM().a };
-  svg.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX, y: e.clientY, cx: zoom.cx, cy: zoom.cy, unitsPerPx: 1 / svg.getScreenCTM().a, moved: false, target: e.target };
+  try {
+    svg.setPointerCapture(e.pointerId);
+  } catch {
+    // capture is only a convenience for dragging past the edge
+  }
 });
 svg.addEventListener('pointerup', () => {
+  const was = drag;
   drag = null;
   svg.classList.remove('panning');
+  if (!was || was.moved) return;
+  // pointer capture retargets events to the svg, so use the element pressed on
+  const ghost = was.target.closest('[data-ghost]');
+  const hex = was.target.closest('[data-hex]');
+  if (ghost) {
+    const h = gridHexes.find((g) => g.id === ghost.dataset.ghost);
+    if (h) excluded.delete(keyOf(h));
+    update();
+  } else if (hex) {
+    toggleSelect(hex.dataset.hex);
+  }
 });
 svg.addEventListener('dblclick', () => baseBox && resetZoom());
 
@@ -161,12 +263,19 @@ svg.addEventListener('pointermove', (e) => {
   if (drag) {
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
-    if (Math.hypot(dx, dy) > 3) svg.classList.add('panning');
-    zoom = { ...zoom, cx: drag.cx - dx * drag.unitsPerPx, cy: drag.cy - dy * drag.unitsPerPx };
-    applyViewBox();
-    tip.hidden = true;
+    if (!drag.moved && Math.hypot(dx, dy) > CLICK_SLOP) {
+      drag.moved = true;
+      svg.classList.add('panning');
+      viewer?.setHover(null);
+    }
+    if (drag.moved) {
+      zoom = { ...zoom, cx: drag.cx - dx * drag.unitsPerPx, cy: drag.cy - dy * drag.unitsPerPx };
+      applyViewBox();
+      tip.hidden = true;
+    }
     return;
   }
+  viewer?.setHover(e.target.closest('[data-hex]')?.dataset.hex ?? null);
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -178,7 +287,32 @@ svg.addEventListener('pointermove', (e) => {
   const y = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 8);
   tip.style.transform = `translate(${x}px, ${y}px)`;
 });
-svg.addEventListener('pointerleave', () => (tip.hidden = true));
+svg.addEventListener('pointerleave', () => {
+  tip.hidden = true;
+  viewer?.setHover(null);
+});
+
+// --- 3D: hover and click by raycasting the hexagon meshes ---------------------
+
+function wire3d(canvas) {
+  let press = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    press = { x: e.clientX, y: e.clientY, button: e.button };
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (view !== '3d' || e.buttons) return;
+    viewer.setHover(viewer.pick(e.clientX, e.clientY));
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    const p = press;
+    press = null;
+    if (view !== '3d' || !p || p.button !== 0) return;
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_SLOP) return;
+    const id = viewer.pick(e.clientX, e.clientY);
+    if (id) toggleSelect(id);
+  });
+  canvas.addEventListener('pointerleave', () => viewer.setHover(null));
+}
 
 // --- startup ---------------------------------------------------------------
 
@@ -194,10 +328,8 @@ async function startViewer() {
   }
   svg.classList.remove('flat');
   btn3d.disabled = false;
-  if (lastLayout) {
-    viewer.update(lastLayout);
-    applyViewBox();
-  }
+  wire3d(viewer.canvas);
+  if (lastLayout) update();
   setView(location.hash === '#3d' ? '3d' : view);
 }
 
@@ -222,7 +354,6 @@ async function start() {
 
   widthIn.addEventListener('input', update);
   heightIn.addEventListener('input', update);
-  unitIn.addEventListener('change', convertUnit);
   svg.classList.add('flat');
   update();
   startViewer();

@@ -86,44 +86,166 @@ h2 {
   color: var(--chalk);
 }
 
-.panel {
+.side {
+  overflow-y: auto;
+  padding-inline-end: 4px;
+  scrollbar-width: thin;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px 14px;
+}
+
+.card h2 { margin: 0; }
+
+.fields {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 8px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 14px;
+  margin: 0;
 }
 
-.panel label,
-.panel .label {
+.fields label,
+.row .label {
   font-family: var(--hand);
   font-size: 1.2rem;
   color: var(--muted);
 }
 
-.panel input,
-.panel select {
+.field {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border-bottom: 1px dashed var(--muted);
+  min-width: 0;
+}
+
+.field:focus-within { border-bottom: 1px solid var(--amber); }
+
+.field input {
+  flex: 1;
   width: 100%;
   min-width: 0;
   background: transparent;
   color: var(--chalk);
   font: 600 14px var(--mono);
   border: 0;
-  border-bottom: 1px dashed var(--muted);
   padding: 4px 2px;
   font-variant-numeric: tabular-nums;
 }
 
-.panel select option { background: var(--paper); }
+.field input:focus-visible { outline: none; }
 
-.panel input:focus-visible,
-.panel select:focus-visible {
-  outline: none;
-  border-bottom: 1px solid var(--amber);
+.suffix {
+  color: var(--muted);
+  font-size: 12px;
 }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font: 500 1.15rem var(--hand);
+  color: var(--chalk);
+}
+
+.count {
+  font: 600 11px var(--mono);
+  color: var(--paper);
+  background: var(--muted);
+  border-radius: 8px;
+  padding: 1px 7px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-height: 26px;
+}
+
+.chips:empty::before {
+  content: attr(data-empty);
+  color: var(--muted);
+  font-family: var(--hand);
+  font-size: 1.05rem;
+  line-height: 26px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(240, 184, 79, 0.08);
+  color: var(--amber);
+}
+
+#excluded-list .chip { color: var(--muted); background: transparent; border-style: dashed; }
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: 600 13px var(--mono);
+  cursor: pointer;
+}
+
+.chip button:hover { background: rgba(231, 226, 212, 0.12); }
+.chip button:focus-visible { outline: 2px solid var(--amber); }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chalk);
+  font: 600 12px var(--mono);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn.primary { background: var(--amber); border-color: var(--amber); color: var(--paper); }
+.btn.primary:hover:not(:disabled) { background: #f5c86e; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 .seg {
   display: flex;
@@ -227,6 +349,7 @@ h2 {
 .hint {
   position: absolute;
   left: 12px;
+  right: 12px;
   bottom: 8px;
   margin: 0;
   font-family: var(--hand);
@@ -278,12 +401,17 @@ h2 {
   pointer-events: none;
 }
 
-.hex:hover polygon { fill: rgba(240, 184, 79, 0.12); stroke: var(--amber); }
+.hex { cursor: pointer; }
+.hex.selected polygon { stroke: var(--amber); stroke-dasharray: 8 5; fill: rgba(240, 184, 79, 0.06); }
+.hex.ghost polygon { stroke: var(--muted); stroke-dasharray: 3 5; fill: rgba(138, 147, 162, 0.04); }
+.hex.ghost text { fill: var(--muted); }
+.hex.ghost:hover polygon { stroke: var(--chalk); fill: rgba(231, 226, 212, 0.08); }
 .node:hover { stroke: var(--chalk); }
 .edge:hover { fill: rgba(236, 124, 99, 0.25); stroke: var(--coral); }
 
 /* fallback while the meshes load, or when WebGL is unavailable */
-.flat .hex polygon { fill: rgba(240, 184, 79, 0.08); stroke: var(--amber); }
+.flat .hex:not(.ghost) polygon { fill: rgba(240, 184, 79, 0.08); stroke: var(--amber); }
+.flat .hex:not(.ghost):hover polygon { fill: rgba(240, 184, 79, 0.2); }
 .flat .node { stroke: var(--paper); stroke-width: 1; }
 .flat .node-3way { fill: var(--cyan); }
 .flat .node-2way { fill: var(--violet); }
