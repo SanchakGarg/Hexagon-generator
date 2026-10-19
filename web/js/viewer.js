@@ -140,10 +140,12 @@ export async function createViewer(container, geo) {
   // On hover the hexagon's parts come out ring by ring from its centre: the centre plate stack, the
   // channels around it, the next plate stacks, the next channels, and so on. They stay out while hovered;
   // moving off sends them back in the same order. Other hexagons stay put.
-  const LIFT = 0.05; // meters toward the viewer at full raise
-  const GROW = { stack: 0.45, channel: 0.1 }; // extra scale of each part about its own centre, which is what shows in 2D
+  const LIFT = 0.16; // meters toward the viewer at full raise
+  const GROW = { stack: 0.6, channel: 0.12 }; // extra scale of each part about its own centre, which is what shows in 2D
   const RING_DELAY = 0.075; // seconds between rings
-  const EASE = 12; // per-second easing rate of each part
+  const EASE = 10; // per-second easing rate of each part
+  // while hovered the raised parts keep a gentle wave running outward through the rings, never dropping to the wall
+  const RIPPLE = { depth: 0.3, period: 1.4 }; // fraction of the raise, seconds per cycle
   const WHITE = new THREE.Color(0xffffff);
   const SELECTED = new THREE.Color(0xffc46b);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -198,9 +200,13 @@ export async function createViewer(container, geo) {
 
   const tint = (id) => (selected.has(id) ? SELECTED : WHITE);
 
-  function applySession(session) {
+  function applySession(session, now = performance.now()) {
     const bodyBase = materials.hexBody.color.clone().multiply(tint(session.h.id));
-    for (const { mesh, part, v } of session.items) {
+    const still = reduceMotion.matches;
+    for (const { mesh, part, v: raise } of session.items) {
+      const phase = (now - session.t0) / 1000 - part.ring * RING_DELAY;
+      const wave = still || phase < 0 ? 0 : RIPPLE.depth * Math.sin((2 * Math.PI * phase) / RIPPLE.period);
+      const v = raise * (1 + wave);
       const k = 1 + (part.led ? GROW.channel : GROW.stack) * v;
       const c = part.center;
       mesh.scale.setScalar(k);
@@ -251,8 +257,8 @@ export async function createViewer(container, geo) {
         if (Math.abs(item.target - item.v) < 0.001) item.v = item.target;
         else settled = false;
       }
-      applySession(session);
-      if (!settled) moving = true;
+      applySession(session, now);
+      if (!settled || (!leaving && !still)) moving = true;
       else if (leaving) done.push(session);
     }
     if (done.length) {
@@ -380,16 +386,17 @@ export async function createViewer(container, geo) {
     render();
   }
 
-  // hexagon under a screen point, for the 3D view where the SVG overlay is hidden
-  function pick(clientX, clientY) {
-    const { body } = hexMeshes;
-    if (!body || !hexList.length) return null;
+  // wall coordinates (URDF x, z) under a screen point, found on the plane of the hexagon frames
+  const wallPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  function wallPoint(clientX, clientY) {
+    if (!lattice) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, mode === '3d' ? perspective : ortho);
-    const hit = raycaster.intersectObjects([body, hoverRoot], true)[0];
-    if (!hit) return null;
-    return hit.object === body ? hexList[hit.instanceId].id : hit.object.userData.hexId ?? null;
+    // root turns URDF -Y toward the viewer, so the frame plane sits at world z = -hexCenter.y
+    wallPlane.constant = lattice.hexCenter.y;
+    const hit = raycaster.ray.intersectPlane(wallPlane, new THREE.Vector3());
+    return hit ? { x: hit.x, z: hit.y } : null;
   }
 
   function setViewBox(box) {
@@ -418,5 +425,5 @@ export async function createViewer(container, geo) {
     kick();
   }
 
-  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, pick };
+  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, wallPoint };
 }

@@ -123,6 +123,8 @@ function update() {
   const s = summarize(W, H, hexes, nodes, lattice, edges);
   lastLayout = { W, H, hexes, nodes, edges, lat: lattice };
   baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
+  if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
+  if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   viewer?.update(lastLayout);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
@@ -170,6 +172,35 @@ function setUnit(next) {
 
 for (const b of unitButtons) b.addEventListener('click', () => setUnit(b.dataset.unit));
 
+// one hovered hexagon drives both the mesh ripple and the overlay (its label fades)
+let hoveredId = null;
+function hover(id) {
+  if (id === hoveredId) return;
+  hoveredId = id;
+  for (const el of svg.querySelectorAll('.hex.hovered')) el.classList.remove('hovered');
+  if (id) svg.querySelector(`[data-hex="${id}"]`)?.classList.add('hovered');
+  viewer?.setHover(id);
+}
+
+// placed hexagon whose outline contains a wall point, so channels and the gaps between them all count
+function hexAt(p) {
+  if (!p || !lastLayout) return null;
+  const { R } = lattice;
+  const half = (R * Math.sqrt(3)) / 2;
+  for (const h of lastLayout.hexes) {
+    const dx = Math.abs(p.x - h.x);
+    const dz = Math.abs(p.z - h.z);
+    if (dx <= half && dz <= R - dx / Math.sqrt(3)) return h.id;
+  }
+  return null;
+}
+
+// SVG overlay coordinates have y running down from the wall's top edge
+const wallFromSvg = (e) => {
+  const p = svgPoint(e);
+  return { x: p.x, z: lastLayout.H - p.y };
+};
+
 function toggleSelect(id) {
   const h = gridHexes.find((g) => g.id === id);
   if (!h) return;
@@ -182,7 +213,7 @@ function toggleSelect(id) {
 excludeBtn.addEventListener('click', () => {
   for (const key of selected) excluded.add(key);
   selected.clear();
-  viewer?.setHover(null);
+  hover(null);
   update();
 });
 clearBtn.addEventListener('click', () => {
@@ -202,7 +233,7 @@ function setView(next) {
   tip.hidden = true;
   if (viewer) {
     hint.textContent = HINTS[next];
-    viewer.setHover(null);
+    hover(null);
     viewer.setMode(next);
   }
 }
@@ -234,7 +265,7 @@ svg.addEventListener(
 let drag = null;
 svg.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || !baseBox) return;
-  drag = { x: e.clientX, y: e.clientY, cx: zoom.cx, cy: zoom.cy, unitsPerPx: 1 / svg.getScreenCTM().a, moved: false, target: e.target };
+  drag = { x: e.clientX, y: e.clientY, cx: zoom.cx, cy: zoom.cy, unitsPerPx: 1 / svg.getScreenCTM().a, moved: false, target: e.target, point: wallFromSvg(e) };
   try {
     svg.setPointerCapture(e.pointerId);
   } catch {
@@ -248,13 +279,13 @@ svg.addEventListener('pointerup', () => {
   if (!was || was.moved) return;
   // pointer capture retargets events to the svg, so use the element pressed on
   const ghost = was.target.closest('[data-ghost]');
-  const hex = was.target.closest('[data-hex]');
-  if (ghost) {
+  const id = hexAt(was.point);
+  if (id) {
+    toggleSelect(id);
+  } else if (ghost) {
     const h = gridHexes.find((g) => g.id === ghost.dataset.ghost);
     if (h) excluded.delete(keyOf(h));
     update();
-  } else if (hex) {
-    toggleSelect(hex.dataset.hex);
   }
 });
 svg.addEventListener('dblclick', () => baseBox && resetZoom());
@@ -266,7 +297,7 @@ svg.addEventListener('pointermove', (e) => {
     if (!drag.moved && Math.hypot(dx, dy) > CLICK_SLOP) {
       drag.moved = true;
       svg.classList.add('panning');
-      viewer?.setHover(null);
+      hover(null);
     }
     if (drag.moved) {
       zoom = { ...zoom, cx: drag.cx - dx * drag.unitsPerPx, cy: drag.cy - dy * drag.unitsPerPx };
@@ -275,7 +306,7 @@ svg.addEventListener('pointermove', (e) => {
     }
     return;
   }
-  viewer?.setHover(e.target.closest('[data-hex]')?.dataset.hex ?? null);
+  hover(hexAt(wallFromSvg(e)));
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -289,7 +320,7 @@ svg.addEventListener('pointermove', (e) => {
 });
 svg.addEventListener('pointerleave', () => {
   tip.hidden = true;
-  viewer?.setHover(null);
+  hover(null);
 });
 
 // --- 3D: hover and click by raycasting the hexagon meshes ---------------------
@@ -301,17 +332,17 @@ function wire3d(canvas) {
   });
   canvas.addEventListener('pointermove', (e) => {
     if (view !== '3d' || e.buttons) return;
-    viewer.setHover(viewer.pick(e.clientX, e.clientY));
+    hover(hexAt(viewer.wallPoint(e.clientX, e.clientY)));
   });
   canvas.addEventListener('pointerup', (e) => {
     const p = press;
     press = null;
     if (view !== '3d' || !p || p.button !== 0) return;
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_SLOP) return;
-    const id = viewer.pick(e.clientX, e.clientY);
+    const id = hexAt(viewer.wallPoint(e.clientX, e.clientY));
     if (id) toggleSelect(id);
   });
-  canvas.addEventListener('pointerleave', () => viewer.setHover(null));
+  canvas.addEventListener('pointerleave', () => hover(null));
 }
 
 // --- startup ---------------------------------------------------------------
