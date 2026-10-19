@@ -1,0 +1,6 @@
+.git
+**/*.part
+hexagon/robot.xml
+hexagon/scene.xml
+**/config.json
+**/.DS_Store
