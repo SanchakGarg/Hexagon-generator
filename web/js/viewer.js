@@ -135,9 +135,91 @@ export async function createViewer(container, geo) {
 
   const render = () => renderer.render(scene, mode === '3d' ? perspective : ortho);
 
+  // --- hover raise, ripple and selection ----------------------------------------
+  const LIFT = 0.06; // meters toward the viewer at full raise
+  const GROW = 0.05; // extra scale at full raise, which is what shows in the front view
+  const WAVE = { delay: 0.11, length: 0.6, falloff: 0.5, height: 0.55 }; // s per pitch, pulse s, decay per pitch, peak
+  const WHITE = new THREE.Color(0xffffff);
+  const SELECTED = new THREE.Color(0xffc46b);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const raycaster = new THREE.Raycaster();
+  const tmp = { m: new THREE.Matrix4(), s: new THREE.Matrix4(), t: new THREE.Matrix4() };
+
+  let hexState = []; // { h, raise } per instance
+  let hexMeshes = { body: null, led: null };
+  let waves = []; // { x, z, t0 } ripples spreading from a hovered hexagon
+  let hoverId = null;
+  let selected = new Set();
+  let lattice = null;
+
+  function waveAt(h, now) {
+    let amp = 0;
+    for (const w of waves) {
+      const d = Math.hypot(h.x - w.x, h.z - w.z) / lattice.pitch;
+      const s = (now - w.t0) / 1000 - d * WAVE.delay;
+      if (s > 0 && s < WAVE.length) amp += WAVE.height * Math.exp(-WAVE.falloff * d) * Math.sin((Math.PI * s) / WAVE.length);
+    }
+    return amp;
+  }
+
+  function writeHexes(now) {
+    const { body, led } = hexMeshes;
+    if (!body || !lattice) return;
+    const hc = lattice.hexCenter;
+    hexState.forEach(({ h, raise }, i) => {
+      const amp = Math.max(raise, waveAt(h, now));
+      const k = 1 + GROW * amp;
+      // scale about the hexagon's own center, then lift it off the wall toward the viewer (URDF -Y)
+      tmp.m.makeTranslation(-hc.x, -hc.y, -hc.z);
+      tmp.m.premultiply(tmp.s.makeScale(k, k, k));
+      tmp.m.premultiply(tmp.t.makeTranslation(h.x, hc.y - LIFT * amp, h.z));
+      body.setMatrixAt(i, tmp.m);
+      led?.setMatrixAt(i, tmp.m);
+      body.setColorAt(i, selected.has(h.id) ? SELECTED : WHITE);
+    });
+    body.instanceMatrix.needsUpdate = true;
+    if (body.instanceColor) body.instanceColor.needsUpdate = true;
+    if (led) led.instanceMatrix.needsUpdate = true;
+  }
+
+  // eases each hexagon toward its hover target; true while anything is still moving
+  function animate(now, dt) {
+    const still = reduceMotion.matches;
+    if (still) waves = [];
+    const maxD = 40;
+    waves = waves.filter((w) => (now - w.t0) / 1000 < maxD * WAVE.delay + WAVE.length);
+    let moving = waves.length > 0;
+    const ease = 1 - Math.exp(-dt * 10);
+    for (const st of hexState) {
+      const target = st.h.id === hoverId ? 1 : 0;
+      st.raise = still ? target : st.raise + (target - st.raise) * ease;
+      if (Math.abs(target - st.raise) > 0.001) moving = true;
+      else st.raise = target;
+    }
+    writeHexes(now);
+    return moving;
+  }
+
+  let rafId = 0;
+  let last = 0;
+  function frame(now) {
+    rafId = 0;
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+    last = now;
+    const moving = animate(now, dt);
+    if (mode === '3d') controls.update();
+    render();
+    if (moving || mode === '3d') rafId = requestAnimationFrame(frame);
+    else last = 0;
+  }
+  const kick = () => {
+    if (!rafId) rafId = requestAnimationFrame(frame);
+  };
+
   function update({ W, H, hexes, nodes, edges, lat }) {
     clear();
     wallSize = { W, H };
+    lattice = lat;
 
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(W, H), materials.wall);
     wall.position.set(W / 2, H / 2, -0.03);
@@ -151,14 +233,14 @@ export async function createViewer(container, geo) {
     const pos = new THREE.Vector3();
     const color = new THREE.Color();
 
-    const hc = lat.hexCenter;
-    const hexBody = instanced(hexTpl.body, materials.hexBody, hexes.length);
-    const hexLed = hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length);
-    hexes.forEach((h, i) => {
-      m.makeTranslation(h.x - hc.x, 0, h.z - hc.z);
-      hexBody.setMatrixAt(i, m);
-      hexLed?.setMatrixAt(i, m);
-    });
+    const previous = new Map(hexState.map((st) => [st.h.id, st.raise]));
+    hexState = hexes.map((h) => ({ h, raise: previous.get(h.id) ?? 0 }));
+    if (!hexes.some((h) => h.id === hoverId)) hoverId = null;
+    hexMeshes = {
+      body: instanced(hexTpl.body, materials.hexBody, hexes.length),
+      led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length),
+    };
+    writeHexes(performance.now());
 
     const nc = new THREE.Vector3(lat.nodeCenter.x, 0, lat.nodeCenter.z);
     const nodeBody = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
@@ -197,6 +279,32 @@ export async function createViewer(container, geo) {
     }
     fitOrtho();
     render();
+    kick();
+  }
+
+  function setHover(id) {
+    if (id === hoverId) return;
+    hoverId = id;
+    const st = id && hexState.find((s) => s.h.id === id);
+    if (st && !reduceMotion.matches) waves.push({ x: st.h.x, z: st.h.z, t0: performance.now() });
+    kick();
+  }
+
+  function setSelected(ids) {
+    selected = new Set(ids);
+    writeHexes(performance.now());
+    render();
+  }
+
+  // hexagon under a screen point, for the 3D view where the SVG overlay is hidden
+  function pick(clientX, clientY) {
+    const { body } = hexMeshes;
+    if (!body || !hexState.length) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, mode === '3d' ? perspective : ortho);
+    const hit = raycaster.intersectObject(body, false)[0];
+    return hit ? hexState[hit.instanceId].h.id : null;
   }
 
   function setViewBox(box) {
@@ -217,26 +325,13 @@ export async function createViewer(container, geo) {
   new ResizeObserver(resize).observe(container);
   resize();
 
-  let running = false;
-  function loop() {
-    if (!running) return;
-    controls.update();
-    render();
-    requestAnimationFrame(loop);
-  }
-
   function setMode(next) {
     mode = next;
     controls.enabled = next === '3d';
     renderer.domElement.style.cursor = next === '3d' ? 'grab' : '';
-    if (next === '3d' && !running) {
-      running = true;
-      requestAnimationFrame(loop);
-    } else if (next !== '3d') {
-      running = false;
-    }
     resize();
+    kick();
   }
 
-  return { update, setViewBox, setMode };
+  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, pick };
 }
