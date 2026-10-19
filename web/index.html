@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
 </head>
 <body>
   <div class="app">
@@ -29,6 +32,11 @@
           <option value="m" selected>m</option>
           <option value="ft">ft</option>
         </select>
+        <span class="label" id="view-label">view</span>
+        <div class="seg" role="group" aria-labelledby="view-label">
+          <button type="button" id="view-2d" aria-pressed="true">2D</button>
+          <button type="button" id="view-3d" aria-pressed="false" disabled>3D</button>
+        </div>
       </form>
 
       <section class="counts" aria-label="Parts count">
@@ -51,6 +59,9 @@
 
     <main class="stage">
       <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout"></svg>
+      <div class="stage3d" id="stage-3d" hidden>
+        <p class="hint" id="hint-3d">loading your STL meshes…</p>
+      </div>
     </main>
   </div>
   <div class="tooltip" id="tooltip" hidden></div>

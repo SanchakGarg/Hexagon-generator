@@ -15,7 +15,7 @@ const snapCorner = (a) => norm(30 + Math.round((a - 30) / 60) * 60);
 const angleDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
 
 function centroid(points) {
-  return { x: avg(points.map((p) => p.x)), z: avg(points.map((p) => p.z)) };
+  return { x: avg(points.map((p) => p.x)), y: avg(points.map((p) => p.y ?? 0)), z: avg(points.map((p) => p.z)) };
 }
 
 export function deriveLattice(hexFrames, nodeFrames, nodeBodyRadius) {
@@ -81,6 +81,10 @@ export function deriveLattice(hexFrames, nodeFrames, nodeBodyRadius) {
     nodeAngles,
     nodeRotation,
     residual,
+    hexCenter: hc,
+    nodeCenter: nc,
+    // shift that puts node frames in the same thickness plane as hexagon frames
+    nodeYOffset: hc.y - nc.y,
   };
 }
 

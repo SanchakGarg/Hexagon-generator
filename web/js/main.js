@@ -11,8 +11,17 @@ const heightIn = $('wall-height');
 const unitIn = $('wall-unit');
 const svg = $('stage-svg');
 const tip = $('tooltip');
+const stage3d = $('stage-3d');
+const hint3d = $('hint-3d');
+const btn2d = $('view-2d');
+const btn3d = $('view-3d');
+let geometry = null;
 let lattice = null;
 let currentUnit = unitIn.value;
+let lastLayout = null;
+let view = '2d';
+let view3dPromise = null;
+let view3d = null;
 
 const formatLength = (m) => {
   const u = unitIn.value;
@@ -36,7 +45,9 @@ function update() {
   const hexes = fitWall(W, H, lattice);
   const nodes = buildNodes(hexes, lattice);
   const s = summarize(W, H, hexes, nodes, lattice);
-  renderWall(svg, { W, H, hexes, nodes, lat: lattice, formatLength });
+  lastLayout = { W, H, hexes, nodes, lat: lattice };
+  renderWall(svg, { ...lastLayout, formatLength });
+  if (view3d && view === '3d') view3d.update(lastLayout);
 
   setStat('stat-hex', s.hexagons);
   setStat('stat-nodes', s.nodes);
@@ -66,6 +77,38 @@ function convertUnit() {
   update();
 }
 
+async function setView(next) {
+  view = next;
+  btn2d.setAttribute('aria-pressed', String(next === '2d'));
+  btn3d.setAttribute('aria-pressed', String(next === '3d'));
+  svg.toggleAttribute('hidden', next !== '2d');
+  stage3d.hidden = next !== '3d';
+  tip.hidden = true;
+  if (next !== '3d') {
+    view3d?.setVisible(false);
+    return;
+  }
+
+  if (!view3dPromise) {
+    hint3d.textContent = 'loading your STL meshes…';
+    view3dPromise = import('./view3d.js').then((m) => m.createView3D(stage3d, geometry));
+  }
+  try {
+    view3d = await view3dPromise;
+  } catch (err) {
+    view3dPromise = null;
+    hint3d.textContent = `3D view failed to load: ${err.message}`;
+    return;
+  }
+  hint3d.textContent = 'drag to orbit · scroll to zoom · right-drag to pan';
+  if (view !== '3d') return;
+  view3d.setVisible(true);
+  if (lastLayout) view3d.update(lastLayout);
+}
+
+btn2d.addEventListener('click', () => setView('2d'));
+btn3d.addEventListener('click', () => setView('3d'));
+
 svg.addEventListener('pointermove', (e) => {
   const target = e.target.closest('[data-tip]');
   if (!target) {
@@ -86,8 +129,8 @@ async function start() {
     return;
   }
   try {
-    const geo = await loadGeometry(new URL('..', location.href).href.replace(/\/$/, ''));
-    lattice = deriveLattice(geo.hexFrames, geo.nodeFrames, geo.nodeBodyRadius);
+    geometry = await loadGeometry(new URL('..', location.href).href.replace(/\/$/, ''));
+    lattice = deriveLattice(geometry.hexFrames, geometry.nodeFrames, geometry.nodeBodyRadius);
   } catch (err) {
     $('note').textContent = `Could not read the URDF files: ${err.message}`;
     return;
@@ -100,7 +143,9 @@ async function start() {
   widthIn.addEventListener('input', update);
   heightIn.addEventListener('input', update);
   unitIn.addEventListener('change', convertUnit);
+  btn3d.disabled = false;
   update();
+  if (location.hash === '#3d') setView('3d');
 }
 
 start();

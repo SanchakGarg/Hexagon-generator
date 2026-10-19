@@ -4,6 +4,8 @@ async function fetchOk(url) {
   return res;
 }
 
+const nums = (s, fallback) => (s ? s.trim().split(/\s+/).map(Number) : fallback);
+
 export function parseFrames(xmlText) {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   const frames = {};
@@ -11,10 +13,29 @@ export function parseFrames(xmlText) {
     const child = joint.querySelector('child')?.getAttribute('link');
     const xyz = joint.querySelector('origin')?.getAttribute('xyz');
     if (!child || !xyz) continue;
-    const [x, , z] = xyz.trim().split(/\s+/).map(Number);
-    frames[child] = { x, z };
+    const [x, y, z] = nums(xyz);
+    frames[child] = { x, y, z };
   }
   return frames;
+}
+
+// Visual meshes of the root link, with mesh URLs resolved against the robot folder.
+export function parseVisuals(xmlText, folderUrl) {
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  const visuals = [];
+  for (const visual of doc.querySelectorAll('robot > link > visual')) {
+    const file = visual.querySelector('geometry > mesh')?.getAttribute('filename');
+    if (!file) continue;
+    const origin = visual.querySelector('origin');
+    visuals.push({
+      part: file.split('/').pop().replace(/\.stl$/i, ''),
+      url: `${folderUrl}/${file.replace(/^package:\/\//, '')}`,
+      xyz: nums(origin?.getAttribute('xyz'), [0, 0, 0]),
+      rpy: nums(origin?.getAttribute('rpy'), [0, 0, 0]),
+      rgba: nums(visual.querySelector('material > color')?.getAttribute('rgba'), [0.4, 0.4, 0.4, 1]),
+    });
+  }
+  return visuals;
 }
 
 // Largest XZ distance from the mesh origin; independent of the in-plane rotation.
@@ -40,9 +61,13 @@ export async function loadGeometry(root) {
     fetchOk(`${root}/Node/robot.urdf`),
     fetchOk(`${root}/Node/assets/middle_plate.stl`),
   ]);
+  const hexXml = await hexRes.text();
+  const nodeXml = await nodeRes.text();
   return {
-    hexFrames: parseFrames(await hexRes.text()),
-    nodeFrames: parseFrames(await nodeRes.text()),
+    hexFrames: parseFrames(hexXml),
+    nodeFrames: parseFrames(nodeXml),
+    hexVisuals: parseVisuals(hexXml, `${root}/hexagon`),
+    nodeVisuals: parseVisuals(nodeXml, `${root}/Node`),
     nodeBodyRadius: stlRadiusXZ(await stlRes.arrayBuffer()),
   };
 }

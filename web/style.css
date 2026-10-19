@@ -19,6 +19,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -95,7 +97,8 @@ h2 {
   padding: 14px;
 }
 
-.panel label {
+.panel label,
+.panel .label {
   font-family: var(--hand);
   font-size: 1.2rem;
   color: var(--muted);
@@ -121,6 +124,28 @@ h2 {
   outline: none;
   border-bottom: 1px solid var(--amber);
 }
+
+.seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  width: max-content;
+}
+
+.seg button {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  padding: 4px 14px;
+  font: 600 12px var(--mono);
+  cursor: pointer;
+}
+
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--amber); color: var(--paper); }
+.seg button:disabled { opacity: 0.4; cursor: default; }
+.seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 
 .counts dl {
   margin: 0;
@@ -181,6 +206,32 @@ h2 {
   flex: 1;
   width: 100%;
   height: 100%;
+}
+
+.stage3d {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stage3d canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  margin: 0;
+  font-family: var(--hand);
+  font-size: 1.1rem;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .wall {
@@ -255,6 +306,7 @@ h2 {
     padding-inline: 16px;
   }
   .stage svg { height: auto; }
+  .stage3d { height: 70vh; flex: none; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
