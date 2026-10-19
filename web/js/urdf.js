@@ -56,18 +56,22 @@ export function stlRadiusXZ(buffer) {
 }
 
 export async function loadGeometry(root) {
-  const [hexRes, nodeRes, stlRes] = await Promise.all([
+  const [hexRes, nodeRes, edgeRes, stlRes] = await Promise.all([
     fetchOk(`${root}/hexagon/robot.urdf`),
     fetchOk(`${root}/Node/robot.urdf`),
+    fetchOk(`${root}/Edge/robot.urdf`),
     fetchOk(`${root}/Node/assets/middle_plate.stl`),
   ]);
   const hexXml = await hexRes.text();
   const nodeXml = await nodeRes.text();
+  const edgeXml = await edgeRes.text();
   return {
     hexFrames: parseFrames(hexXml),
     nodeFrames: parseFrames(nodeXml),
+    edgeFrames: parseFrames(edgeXml),
     hexVisuals: parseVisuals(hexXml, `${root}/hexagon`),
     nodeVisuals: parseVisuals(nodeXml, `${root}/Node`),
+    edgeVisuals: parseVisuals(edgeXml, `${root}/Edge`),
     nodeBodyRadius: stlRadiusXZ(await stlRes.arrayBuffer()),
   };
 }

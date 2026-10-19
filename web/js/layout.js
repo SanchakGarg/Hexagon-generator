@@ -6,6 +6,10 @@ const ANCHORS = {
   down: { hexFrame: '22', nodeFrame: 'node-1' },
 };
 const UP_CORNERS = new Set([30, 150, 270]);
+// Edge pieces close open honeycomb sides: edge-1 mates whichever free node frame points along the side,
+// trying node-1 first.
+const EDGE_FRAME = 'edge-1';
+const EDGE_NODE_FRAMES = ['node-1', 'node-3', 'node-5'];
 
 const rad = (d) => (d * Math.PI) / 180;
 const norm = (d) => ((d % 360) + 360) % 360;
@@ -88,6 +92,24 @@ export function deriveLattice(hexFrames, nodeFrames, nodeBodyRadius) {
   };
 }
 
+// An Edge is one hexagon side with its midpoint plate stack; edge-1 sits at one end of it.
+export function deriveEdge(edgeFrames, edgeVisuals, lat) {
+  const anchor = edgeFrames[EDGE_FRAME];
+  if (!anchor) throw new Error(`Edge URDF has no ${EDGE_FRAME} frame`);
+  const plate = edgeVisuals.find((v) => v.part === 'middle_plate');
+  const mid = plate
+    ? { x: plate.xyz[0], z: plate.xyz[2] }
+    : centroid(edgeVisuals.map((v) => ({ x: v.xyz[0], z: v.xyz[2] })));
+  const half = Math.hypot(mid.x - anchor.x, mid.z - anchor.z);
+  return {
+    anchor,
+    // direction from edge-1 toward the far end, in the Edge's own XZ plane
+    axisAngle: deg(Math.atan2(mid.z - anchor.z, mid.x - anchor.x)),
+    length: 2 * half,
+    yOffset: lat.hexCenter.y - anchor.y,
+  };
+}
+
 export function fitWall(W, H, lat) {
   const { pitch, rowPitch, hw, hh } = lat;
   if (W < 2 * hw || H < 2 * hh) return [];
@@ -157,6 +179,55 @@ export function buildNodes(hexes, lat) {
   return nodes;
 }
 
+export function buildEdges(hexes, nodes, lat, W, H) {
+  if (!lat.edge) return [];
+  const { R, r } = lat;
+  const keyOf = (x, z) => `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
+  const hexAt = new Set(hexes.map((h) => keyOf(h.x, h.z)));
+  const apothem = (R * Math.sqrt(3)) / 2;
+  const eps = 1e-6;
+  const covered = new Set();
+  const edges = [];
+
+  for (const n of nodes) {
+    for (const nodeFrame of EDGE_NODE_FRAMES) {
+      if (!n.spare.includes(nodeFrame)) continue;
+      const a = norm(lat.nodeAngles[nodeFrame] + n.rotation);
+      const ux = Math.cos(rad(a));
+      const uz = Math.sin(rad(a));
+
+      // the side is already built when a placed hexagon owns it, or claimed when an Edge from its other end took it
+      const mx = n.x + (R / 2) * ux;
+      const mz = n.z + (R / 2) * uz;
+      const side = keyOf(mx, mz);
+      if (covered.has(side)) continue;
+      if ([1, -1].some((s) => hexAt.has(keyOf(mx - s * apothem * uz, mz + s * apothem * ux)))) continue;
+
+      const tipX = n.x + (r + lat.edge.length) * ux;
+      const tipZ = n.z + (r + lat.edge.length) * uz;
+      if (tipX < -eps || tipX > W + eps || tipZ < -eps || tipZ > H + eps) continue;
+
+      const edge = {
+        id: `E${edges.length + 1}`,
+        nodeId: n.id,
+        edgeFrame: EDGE_FRAME,
+        nodeFrame,
+        x: n.x + r * ux,
+        z: n.z + r * uz,
+        angle: a,
+        rotation: norm(a - lat.edge.axisAngle),
+        tipX,
+        tipZ,
+      };
+      covered.add(side);
+      edges.push(edge);
+      n.edges = [...(n.edges ?? []), edge.id];
+      n.spare = n.spare.filter((f) => f !== nodeFrame);
+    }
+  }
+  return edges;
+}
+
 export function countGroups(hexes, nodes) {
   const parent = new Map(hexes.map((h) => [h.id, h.id]));
   const find = (id) => (parent.get(id) === id ? id : find(parent.get(id)));
@@ -168,7 +239,7 @@ export function countGroups(hexes, nodes) {
   return new Set(hexes.map((h) => find(h.id))).size;
 }
 
-export function summarize(W, H, hexes, nodes, lat) {
+export function summarize(W, H, hexes, nodes, lat, edges = []) {
   const hexArea = ((3 * Math.sqrt(3)) / 2) * lat.R * lat.R;
   return {
     hexagons: hexes.length,
@@ -176,7 +247,8 @@ export function summarize(W, H, hexes, nodes, lat) {
     threeWay: nodes.filter((n) => n.kind === '3-way').length,
     twoWay: nodes.filter((n) => n.kind === '2-way').length,
     edge: nodes.filter((n) => n.kind === 'edge').length,
-    joints: nodes.reduce((s, n) => s + n.joints.length, 0),
+    edges: edges.length,
+    joints: nodes.reduce((s, n) => s + n.joints.length, 0) + edges.length,
     spareFrames: nodes.reduce((s, n) => s + n.spare.length, 0),
     coverage: (hexes.length * hexArea) / (W * H),
     groups: countGroups(hexes, nodes),
