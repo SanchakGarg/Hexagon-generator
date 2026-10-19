@@ -167,12 +167,27 @@ export async function createViewer(container, geo) {
   let nodeList = [];
   let nodeMesh = null;
   let edgeMeshes = { body: null, led: null };
+  let edgeList = [];
   const shown = (layer) => show[layer] !== false;
+  // an Edge's LEDs follow both the LED and the Edge toggles
+  const partShown = (part) => (part.led ? shown('led') : true) && shown(part.layer);
+
+  // an Edge is turned in-plane and slid so its edge-1 frame lands on the node frame it mates
+  function edgeMatrix(e, m = new THREE.Matrix4()) {
+    const q = inPlane(new THREE.Quaternion(), e.rotation);
+    const anchor = new THREE.Vector3(lattice.edge.anchor.x, 0, lattice.edge.anchor.z).applyQuaternion(q);
+    const pos = new THREE.Vector3(e.x, lattice.edge.yOffset, e.z).sub(anchor);
+    return m.compose(pos, q, ONE);
+  }
+  const edgeParts = edgeTpl.parts.map((p) => {
+    const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
+    return { geometry: p.geometry, led: p.led, layer: 'edges', center: box.getCenter(new THREE.Vector3()) };
+  });
 
   function buildHexParts(hc) {
     const parts = hexTpl.parts.map((p) => {
       const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
-      return { geometry: p.geometry, led: p.led, center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
+      return { geometry: p.geometry, led: p.led, layer: 'hex', center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
     });
     // 2 cm buckets: centre stack, inner channels, inner stacks, mid channels, outer stacks, outer channels
     const bucket = (d) => Math.round(d * 50);
@@ -181,22 +196,67 @@ export async function createViewer(container, geo) {
     return { parts, rings: levels.length };
   }
 
+  function partMesh(part, parent, hexId) {
+    const material = (part.led ? materials.led : part.layer === 'edges' ? materials.edgeBody : materials.hexBody).clone();
+    const mesh = new THREE.Mesh(part.geometry, material);
+    mesh.userData.hexId = hexId;
+    mesh.visible = partShown(part);
+    parent.add(mesh);
+    return mesh;
+  }
+
   function openSession(h) {
     const hc = lattice.hexCenter;
     const group = new THREE.Group();
     group.position.set(h.x - hc.x, 0, h.z - hc.z);
-    const items = hexParts.parts.map((part) => {
-      const material = (part.led ? materials.led : materials.hexBody).clone();
-      const mesh = new THREE.Mesh(part.geometry, material);
-      mesh.userData.hexId = h.id;
-      mesh.visible = shown(part.led ? 'led' : 'hex');
-      group.add(mesh);
-      return { mesh, part, v: 0, target: 0 };
-    });
+    const items = hexParts.parts.map((part) => ({ mesh: partMesh(part, group, h.id), part, ring: part.ring, v: 0, target: 0 }));
     hoverRoot.add(group);
-    const session = { h, group, items, t0: performance.now(), leaveAt: null };
+    const session = { h, group, items, edgeItems: [], t0: performance.now(), leaveAt: null };
+    attachEdges(session);
     sessions.push(session);
     return session;
+  }
+
+  // the hexagon's Edges come out with it, as the rings after its own outer channels; rebuilt whenever the layout
+  // changes, keeping how far each part is already out
+  function attachEdges(session) {
+    const { h, group } = session;
+    const before = new Map(session.edgeItems.map((item) => [item.key, item]));
+    for (const item of session.edgeItems) {
+      item.holder.removeFromParent();
+      item.mesh.material.dispose();
+    }
+    session.items = session.items.filter((item) => item.part.layer !== 'edges');
+    session.edgeItems = [];
+    const offset = new THREE.Matrix4().makeTranslation(-group.position.x, 0, -group.position.z);
+    const bucket = (d) => Math.round(d * 50);
+    for (const e of edgeList.filter((x) => x.hexId === h.id)) {
+      const m = edgeMatrix(e);
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.multiplyMatrices(offset, m);
+      group.add(holder);
+      const d = edgeParts.map((part) => {
+        const c = part.center.clone().applyMatrix4(m);
+        return bucket(Math.hypot(c.x - h.x, c.z - h.z));
+      });
+      const levels = [...new Set(d)].sort((x, y) => x - y);
+      edgeParts.forEach((part, i) => {
+        const key = `${Math.round(e.angle)}:${i}`;
+        const prev = before.get(key);
+        const item = {
+          key,
+          holder,
+          mesh: partMesh(part, holder, h.id),
+          part,
+          ring: hexParts.rings + levels.indexOf(d[i]),
+          v: prev?.v ?? 0,
+          target: prev?.target ?? 0,
+        };
+        session.edgeItems.push(item);
+        session.items.push(item);
+      });
+    }
   }
 
   function closeSession(session) {
@@ -209,8 +269,8 @@ export async function createViewer(container, geo) {
   function applySession(session, now = performance.now()) {
     const bodyBase = materials.hexBody.color.clone().multiply(tint(session.h.id));
     const still = reduceMotion.matches;
-    for (const { mesh, part, v: raise } of session.items) {
-      const phase = (now - session.t0) / 1000 - part.ring * RING_DELAY;
+    for (const { mesh, part, ring, v: raise } of session.items) {
+      const phase = (now - session.t0) / 1000 - ring * RING_DELAY;
       const wave = still || phase < 0 ? 0 : RIPPLE.depth * Math.sin((2 * Math.PI * phase) / RIPPLE.period);
       const v = raise * (1 + wave);
       const k = 1 + (part.led ? GROW.channel : GROW.stack) * v;
@@ -240,6 +300,28 @@ export async function createViewer(container, geo) {
     body.instanceMatrix.needsUpdate = true;
     if (body.instanceColor) body.instanceColor.needsUpdate = true;
     if (led) led.instanceMatrix.needsUpdate = true;
+    writeEdges();
+  }
+
+  // Edges belong to their hexagon: they share its selection tint and leave the wall with it
+  function writeEdges() {
+    const { body, led } = edgeMeshes;
+    if (!lattice || (!body && !led)) return;
+    const out = new Set(sessions.map((s) => s.h.id));
+    const m = new THREE.Matrix4();
+    edgeList.forEach((e, i) => {
+      if (out.has(e.hexId)) m.makeScale(0, 0, 0);
+      else edgeMatrix(e, m);
+      body?.setMatrixAt(i, m);
+      led?.setMatrixAt(i, m);
+      body?.setColorAt(i, tint(e.hexId));
+    });
+    for (const mesh of [body, led]) {
+      if (!mesh) continue;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    }
   }
 
   // advances every session; true while anything is still moving
@@ -254,7 +336,7 @@ export async function createViewer(container, geo) {
       const elapsed = (now - (leaving ? session.leaveAt : session.t0)) / 1000;
       let settled = true;
       for (const item of session.items) {
-        const ring = item.part.ring;
+        const ring = item.ring;
         // both ways run centre first: centre stack, its channels, the next stacks, and so on
         const delay = still ? 0 : ring * RING_DELAY;
         if (elapsed >= delay) item.target = leaving ? 0 : 1;
@@ -303,26 +385,29 @@ export async function createViewer(container, geo) {
     scene.add(wall, outline);
     wallObjects = [wall, outline];
 
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const pos = new THREE.Vector3();
     const color = new THREE.Color();
 
     hexParts ??= buildHexParts(lat.hexCenter);
     hexList = hexes;
     const byId = new Map(hexes.map((h) => [h.id, h]));
     if (!byId.has(hoverId)) hoverId = null;
+    edgeList = edges;
     // drop parts of hexagons that left the layout; follow the rest if they moved
     for (const session of sessions.filter((s) => !byId.has(s.h.id))) closeSession(session);
     sessions = sessions.filter((s) => byId.has(s.h.id));
     for (const session of sessions) {
       session.h = byId.get(session.h.id);
       session.group.position.set(session.h.x - lat.hexCenter.x, 0, session.h.z - lat.hexCenter.z);
+      attachEdges(session);
       applySession(session);
     }
     hexMeshes = {
       body: instanced(hexTpl.body, materials.hexBody, hexes.length),
       led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length),
+    };
+    edgeMeshes = {
+      body: edgeTpl.body && instanced(edgeTpl.body, materials.edgeBody, edges.length),
+      led: edgeTpl.led && instanced(edgeTpl.led, materials.led, edges.length),
     };
     writeHexes();
 
@@ -331,19 +416,6 @@ export async function createViewer(container, geo) {
     nodes.forEach((n, i) => nodeMesh.setColorAt(i, color.setHex(NODE_COLORS[n.kind])));
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
     writeNodes();
-
-    // each Edge is turned in-plane and slid so its edge-1 frame lands on the node frame it mates
-    const anchor = new THREE.Vector3(lat.edge.anchor.x, 0, lat.edge.anchor.z);
-    const edgeBody = edgeTpl.body && instanced(edgeTpl.body, materials.edgeBody, edges.length);
-    const edgeLed = edgeTpl.led && instanced(edgeTpl.led, materials.led, edges.length);
-    edgeMeshes = { body: edgeBody, led: edgeLed };
-    edges.forEach((e, i) => {
-      inPlane(q, e.rotation);
-      pos.set(e.x, lat.edge.yOffset, e.z).sub(anchor.clone().applyQuaternion(q));
-      m.compose(pos, q, ONE);
-      edgeBody?.setMatrixAt(i, m);
-      edgeLed?.setMatrixAt(i, m);
-    });
 
     // frame the wall plus any Edges that overhang it
     const bounds = { minX: 0, maxX: W, minZ: 0, maxZ: H };
@@ -390,7 +462,7 @@ export async function createViewer(container, geo) {
     if (hexMeshes.led) hexMeshes.led.visible = shown('led');
     if (edgeMeshes.body) edgeMeshes.body.visible = shown('edges');
     if (edgeMeshes.led) edgeMeshes.led.visible = shown('edges') && shown('led');
-    for (const session of sessions) for (const { mesh, part } of session.items) mesh.visible = shown(part.led ? 'led' : 'hex');
+    for (const session of sessions) for (const { mesh, part } of session.items) mesh.visible = partShown(part);
   }
 
   function setShow(next) {

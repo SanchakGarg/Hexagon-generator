@@ -18,6 +18,7 @@ const unitButtons = [...document.querySelectorAll('#units [data-unit]')];
 const viewport = $('viewport');
 const svg = $('stage-svg');
 const tip = $('tooltip');
+const hexCard = $('hex-card');
 const hint = $('hint');
 const btn2d = $('view-2d');
 const btn3d = $('view-3d');
@@ -130,6 +131,7 @@ function update() {
   baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
+  showHexCard(hoveredId);
   viewer?.update(lastLayout);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
@@ -185,9 +187,49 @@ function hover(id) {
   for (const el of svg.querySelectorAll('.hex.hovered')) el.classList.remove('hovered');
   if (id) svg.querySelector(`[data-hex="${id}"]`)?.classList.add('hovered');
   viewer?.setHover(id);
+  showHexCard(id);
 }
 
-// placed hexagon whose outline contains a wall point, so channels and the gaps between them all count
+// what one hexagon brings to the wall: its corner nodes, its Edges and the joints they make
+function showHexCard(id) {
+  const h = id && lastLayout?.hexes.find((x) => x.id === id);
+  if (!h) {
+    hexCard.hidden = true;
+    return;
+  }
+  const { nodes, edges } = lastLayout;
+  const corners = nodes.filter((n) => n.joints.some((j) => j.hexId === id));
+  const kinds = { '3-way': 0, '2-way': 0, edge: 0 };
+  for (const n of corners) kinds[n.kind]++;
+  const neighbours = new Set(corners.flatMap((n) => n.joints.map((j) => j.hexId)).filter((x) => x !== id));
+  const own = edges.filter((e) => e.hexId === id);
+  const rows = [
+    ['neighbours', neighbours.size],
+    ['3-way nodes', kinds['3-way']],
+    ['2-way nodes', kinds['2-way']],
+    ['edge nodes', kinds.edge],
+    ['Edge pieces', own.length ? `${own.length} · ${own.map((e) => e.id).join(' ')}` : 0],
+    ['joints', corners.length + own.length],
+  ];
+  const title = document.createElement('p');
+  title.className = 'hex-card-title';
+  title.textContent = `${h.id} · row ${h.row}, col ${h.col}${selected.has(keyOf(h)) ? ' · selected' : ''}`;
+  const dl = document.createElement('dl');
+  for (const [label, value] of rows) {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = label;
+    dd.textContent = value;
+    row.append(dt, dd);
+    dl.append(row);
+  }
+  hexCard.replaceChildren(title, dl);
+  hexCard.hidden = false;
+}
+
+// placed hexagon whose outline contains a wall point, so channels and the gaps between them all count; an Edge
+// counts as part of its hexagon
 function hexAt(p) {
   if (!p || !lastLayout) return null;
   const { R } = lattice;
@@ -196,6 +238,12 @@ function hexAt(p) {
     const dx = Math.abs(p.x - h.x);
     const dz = Math.abs(p.z - h.z);
     if (dx <= half && dz <= R - dx / Math.sqrt(3)) return h.id;
+  }
+  for (const e of lastLayout.edges) {
+    const vx = e.tipX - e.x;
+    const vz = e.tipZ - e.z;
+    const t = Math.max(0, Math.min(1, ((p.x - e.x) * vx + (p.z - e.z) * vz) / (vx * vx + vz * vz)));
+    if (Math.hypot(p.x - (e.x + t * vx), p.z - (e.z + t * vz)) <= lattice.rho) return e.hexId;
   }
   return null;
 }

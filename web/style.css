@@ -455,6 +455,31 @@ h2 {
 .flat .node-edge { fill: var(--coral); }
 .flat .edge { fill: rgba(236, 124, 99, 0.35); stroke: var(--coral); }
 
+.hex-card {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  min-width: 200px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.hex-card-title {
+  margin: 0 0 6px;
+  font: 700 1.2rem var(--hand);
+  color: var(--amber);
+}
+
+.hex-card dl { margin: 0; display: grid; gap: 2px; }
+.hex-card dl > div { display: flex; justify-content: space-between; gap: 16px; }
+.hex-card dt { color: var(--muted); }
+.hex-card dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 .tooltip {
   position: fixed;
   left: 0;
