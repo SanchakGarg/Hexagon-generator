@@ -36,13 +36,20 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   const nodeR = Math.max(lat.rho, size * 0.007);
   const y = (z) => H - z;
 
-  // Edges may overhang the wall, so frame the wall plus every Edge tip
+  // frame the wall plus every Edge tip
   const ext = { minX: 0, maxX: W, minY: 0, maxY: H };
   for (const e of edges) {
     ext.minX = Math.min(ext.minX, e.tipX);
     ext.maxX = Math.max(ext.maxX, e.tipX);
     ext.minY = Math.min(ext.minY, y(e.tipZ));
     ext.maxY = Math.max(ext.maxY, y(e.tipZ));
+  }
+  // re-centring can slide excluded outlines past the wall edge
+  for (const h of excluded) {
+    ext.minX = Math.min(ext.minX, h.x - lat.hw);
+    ext.maxX = Math.max(ext.maxX, h.x + lat.hw);
+    ext.minY = Math.min(ext.minY, y(h.z) - lat.hh);
+    ext.maxY = Math.max(ext.maxY, y(h.z) + lat.hh);
   }
   const viewBox = {
     x: ext.minX - pad,

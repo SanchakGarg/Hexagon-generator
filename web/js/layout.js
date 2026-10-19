@@ -157,6 +157,17 @@ export function fitWall(W, H, lat) {
   return hexes;
 }
 
+// Slide the whole grid so the kept hexagons sit centred on the wall; excluded ones move with it.
+export function centerKept(grid, keep, W, H) {
+  const kept = grid.filter(keep);
+  if (!kept.length) return grid;
+  const xs = kept.map((h) => h.x);
+  const zs = kept.map((h) => h.z);
+  const dx = W / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+  const dz = H / 2 - (Math.min(...zs) + Math.max(...zs)) / 2;
+  return grid.map((h) => ({ ...h, x: h.x + dx, z: h.z + dz }));
+}
+
 export function buildNodes(hexes, lat) {
   const byKey = new Map();
   for (const h of hexes) {

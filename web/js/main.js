@@ -1,5 +1,5 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, buildNodes, buildEdges, summarize } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, summarize } from './layout.js';
 import { renderWall } from './render.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -118,7 +118,8 @@ function update() {
     return;
   }
 
-  gridHexes = fitWall(W, H, lattice);
+  // re-centre on what is left, so excluding hexagons doesn't leave the assembly off to one side
+  gridHexes = centerKept(fitWall(W, H, lattice), (h) => !excluded.has(keyOf(h)), W, H);
   const hexes = gridHexes.filter((h) => !excluded.has(keyOf(h)));
   const removed = gridHexes.filter((h) => excluded.has(keyOf(h)));
   for (const key of [...selected]) if (!hexes.some((h) => keyOf(h) === key)) selected.delete(key);
@@ -135,7 +136,8 @@ function update() {
   viewer?.update(lastLayout);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
-  if (key !== zoomKey) {
+  // refit when the wall changes, or when the drawing grew or shrank while the view wasn't zoomed
+  if (key !== zoomKey || zoom.scale === 1) {
     zoomKey = key;
     resetZoom();
   } else {
