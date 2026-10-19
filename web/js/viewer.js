@@ -179,6 +179,18 @@ export async function createViewer(container, geo) {
     const pos = new THREE.Vector3(e.x, lattice.edge.yOffset, e.z).sub(anchor);
     return m.compose(pos, q, ONE);
   }
+  function nodeMatrix(n, m = new THREE.Matrix4()) {
+    const q = inPlane(new THREE.Quaternion(), n.rotation);
+    const nc = new THREE.Vector3(lattice.nodeCenter.x, 0, lattice.nodeCenter.z).applyQuaternion(q);
+    const pos = new THREE.Vector3(n.x, lattice.nodeYOffset, n.z).sub(nc);
+    return m.compose(pos, q, ONE);
+  }
+  const nodeKey = (n) => `${n.x.toFixed(4)},${n.z.toFixed(4)}`;
+  const nodeLayer = (n) => n.kind.replace('-', '');
+  const nodeParts = nodeTpl.parts.map((p) => {
+    const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
+    return { geometry: p.geometry, led: p.led, center: box.getCenter(new THREE.Vector3()) };
+  });
   const edgeParts = edgeTpl.parts.map((p) => {
     const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
     return { geometry: p.geometry, led: p.led, layer: 'edges', center: box.getCenter(new THREE.Vector3()) };
@@ -197,7 +209,8 @@ export async function createViewer(container, geo) {
   }
 
   function partMesh(part, parent, hexId) {
-    const material = (part.led ? materials.led : part.layer === 'edges' ? materials.edgeBody : materials.hexBody).clone();
+    const body = { edges: materials.edgeBody, hex: materials.hexBody }[part.layer] ?? materials.nodeBody;
+    const material = (part.led ? materials.led : body).clone();
     const mesh = new THREE.Mesh(part.geometry, material);
     mesh.userData.hexId = hexId;
     mesh.visible = partShown(part);
@@ -211,8 +224,9 @@ export async function createViewer(container, geo) {
     group.position.set(h.x - hc.x, 0, h.z - hc.z);
     const items = hexParts.parts.map((part) => ({ mesh: partMesh(part, group, h.id), part, ring: part.ring, v: 0, target: 0 }));
     hoverRoot.add(group);
-    const session = { h, group, items, edgeItems: [], t0: performance.now(), leaveAt: null };
+    const session = { h, group, items, edgeItems: [], nodeItems: [], t0: performance.now(), leaveAt: null };
     attachEdges(session);
+    attachNodes(session);
     sessions.push(session);
     return session;
   }
@@ -249,7 +263,7 @@ export async function createViewer(container, geo) {
           holder,
           mesh: partMesh(part, holder, h.id),
           part,
-          ring: hexParts.rings + levels.indexOf(d[i]),
+          ring: hexParts.rings + 1 + levels.indexOf(d[i]),
           v: prev?.v ?? 0,
           target: prev?.target ?? 0,
         };
@@ -259,8 +273,55 @@ export async function createViewer(container, geo) {
     }
   }
 
+  // Its corner nodes come out with it too, just after its outer channels and before its Edges. A 2-way or 3-way
+  // node is shared, so it goes with the hexagon that claimed it last, keeping how far it is already out. Nodes sit
+  // straight under hoverRoot, so a claim moves only the item between sessions.
+  function attachNodes(session) {
+    const { h } = session;
+    const wanted = new Map(nodeList.filter((n) => n.joints.some((j) => j.hexId === h.id)).map((n) => [nodeKey(n), n]));
+    for (const item of session.nodeItems.filter((x) => !wanted.has(x.key))) disposeItem(item);
+    session.nodeItems = session.nodeItems.filter((x) => wanted.has(x.key));
+    for (const [key, n] of wanted) {
+      for (const other of sessions) {
+        if (other === session) continue;
+        const taken = other.nodeItems.filter((x) => x.key === key);
+        if (!taken.length) continue;
+        other.nodeItems = other.nodeItems.filter((x) => x.key !== key);
+        other.items = other.items.filter((x) => !taken.includes(x));
+        session.nodeItems.push(...taken);
+      }
+      const own = session.nodeItems.filter((x) => x.key === key);
+      if (own.length) {
+        for (const item of own) {
+          item.holder.matrix.copy(nodeMatrix(n));
+          item.part = { ...item.part, layer: nodeLayer(n) };
+          item.base.setHex(NODE_COLORS[n.kind]);
+          item.mesh.visible = partShown(item.part);
+        }
+        continue;
+      }
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.copy(nodeMatrix(n));
+      hoverRoot.add(holder);
+      for (const p of nodeParts) {
+        const part = { ...p, layer: nodeLayer(n) };
+        session.nodeItems.push({ key, holder, mesh: partMesh(part, holder, h.id), part, base: new THREE.Color(NODE_COLORS[n.kind]), v: 0, target: 0 });
+      }
+    }
+    for (const item of session.nodeItems) item.ring = hexParts.rings;
+    session.items = [...session.items.filter((x) => x.part.layer === 'hex' || x.part.layer === 'edges'), ...session.nodeItems];
+  }
+
+  function disposeItem(item) {
+    item.mesh.material.dispose();
+    if (item.holder && !item.holder.children.some((m) => m !== item.mesh)) item.holder.removeFromParent();
+    else item.mesh.removeFromParent();
+  }
+
   function closeSession(session) {
     hoverRoot.remove(session.group);
+    for (const item of session.nodeItems) item.holder.removeFromParent();
     for (const { mesh } of session.items) mesh.material.dispose();
   }
 
@@ -269,7 +330,8 @@ export async function createViewer(container, geo) {
   function applySession(session, now = performance.now()) {
     const bodyBase = materials.hexBody.color.clone().multiply(tint(session.h.id));
     const still = reduceMotion.matches;
-    for (const { mesh, part, ring, v: raise } of session.items) {
+    for (const item of session.items) {
+      const { mesh, part, ring, v: raise } = item;
       const phase = (now - session.t0) / 1000 - ring * RING_DELAY;
       const wave = still || phase < 0 ? 0 : RIPPLE.depth * Math.sin((2 * Math.PI * phase) / RIPPLE.period);
       const v = raise * (1 + wave);
@@ -279,7 +341,7 @@ export async function createViewer(container, geo) {
       // grow about the part's own centre, then lift it off the wall toward the viewer (URDF -Y)
       mesh.position.set(c.x * (1 - k), c.y * (1 - k) - LIFT * v, c.z * (1 - k));
       if (part.led) mesh.material.emissiveIntensity = materials.led.emissiveIntensity * (1 + 2.5 * v);
-      else mesh.material.color.copy(bodyBase).multiplyScalar(1 + 1.1 * v);
+      else mesh.material.color.copy(item.base ?? bodyBase).multiplyScalar(1 + 1.1 * v);
     }
   }
 
@@ -301,6 +363,7 @@ export async function createViewer(container, geo) {
     if (body.instanceColor) body.instanceColor.needsUpdate = true;
     if (led) led.instanceMatrix.needsUpdate = true;
     writeEdges();
+    writeNodes();
   }
 
   // Edges belong to their hexagon: they share its selection tint and leave the wall with it
@@ -392,6 +455,8 @@ export async function createViewer(container, geo) {
     const byId = new Map(hexes.map((h) => [h.id, h]));
     if (!byId.has(hoverId)) hoverId = null;
     edgeList = edges;
+    nodeList = nodes;
+    nodeMesh = null; // clear() disposed it; rebuilt below
     // drop parts of hexagons that left the layout; follow the rest if they moved
     for (const session of sessions.filter((s) => !byId.has(s.h.id))) closeSession(session);
     sessions = sessions.filter((s) => byId.has(s.h.id));
@@ -399,6 +464,7 @@ export async function createViewer(container, geo) {
       session.h = byId.get(session.h.id);
       session.group.position.set(session.h.x - lat.hexCenter.x, 0, session.h.z - lat.hexCenter.z);
       attachEdges(session);
+      attachNodes(session);
       applySession(session);
     }
     hexMeshes = {
@@ -411,7 +477,6 @@ export async function createViewer(container, geo) {
     };
     writeHexes();
 
-    nodeList = nodes;
     nodeMesh = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
     nodes.forEach((n, i) => nodeMesh.setColorAt(i, color.setHex(NODE_COLORS[n.kind])));
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
@@ -436,21 +501,16 @@ export async function createViewer(container, geo) {
     kick();
   }
 
-  // nodes of a hidden kind collapse to nothing, since all kinds share one instanced mesh
+  // all node kinds share one instanced mesh
   function writeNodes() {
     if (!nodeMesh || !lattice) return;
     const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const pos = new THREE.Vector3();
-    const nc = new THREE.Vector3(lattice.nodeCenter.x, 0, lattice.nodeCenter.z);
+    const out = new Set(sessions.flatMap((s) => s.nodeItems.map((x) => x.key)));
     nodeList.forEach((n, i) => {
-      if (!shown(n.kind.replace('-', ''))) {
-        nodeMesh.setMatrixAt(i, m.makeScale(0, 0, 0));
-        return;
-      }
-      inPlane(q, n.rotation);
-      pos.set(n.x, lattice.nodeYOffset, n.z).sub(nc.clone().applyQuaternion(q));
-      nodeMesh.setMatrixAt(i, m.compose(pos, q, ONE));
+      // hidden kinds, and nodes that are out with a hovered hexagon, collapse to nothing
+      if (!shown(nodeLayer(n)) || out.has(nodeKey(n))) m.makeScale(0, 0, 0);
+      else nodeMatrix(n, m);
+      nodeMesh.setMatrixAt(i, m);
     });
     nodeMesh.instanceMatrix.needsUpdate = true;
     // the cached bounds would otherwise cull nodes that come back after being hidden
@@ -483,6 +543,8 @@ export async function createViewer(container, geo) {
       if (existing) {
         existing.leaveAt = null;
         existing.t0 = now;
+        attachNodes(existing);
+        writeHexes();
       } else {
         applySession(openSession(h));
         writeHexes();

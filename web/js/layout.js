@@ -6,11 +6,16 @@ const ANCHORS = {
   down: { hexFrame: '22', nodeFrame: 'node-1' },
 };
 const UP_CORNERS = new Set([30, 150, 270]);
-// Edge nodes (one hexagon) get an Edge on their open side, mating its edge-1 frame to an odd node frame there.
+// Edge nodes (one hexagon) get an Edge on their open side, mating its edge-1 frame to the node frame the user
+// chose for that corner: node-3 on top, node-2 at the bottom, node-5 on the left and right. The node is turned
+// so that frame faces out, and the hexagon mates whichever node frame then faces it.
 const EDGE_FRAME = 'edge-1';
-const ODD_FRAMES = ['node-1', 'node-3', 'node-5'];
-// the frames the user's hexagon rule mates (11/22 to node-1, 31/12 to node-5)
-const HEX_RULE_FRAMES = ['node-1', 'node-5'];
+const EDGE_NODE_FRAME = { 90: 'node-3', 270: 'node-2', 30: 'node-5', 330: 'node-5', 150: 'node-5', 210: 'node-5' };
+// the two corners of a vertical side, upper first: only the upper one takes an Edge when both are edge nodes
+const VERTICAL_SIDES = [
+  [150, 210],
+  [30, 330],
+];
 
 const rad = (d) => (d * Math.PI) / 180;
 const norm = (d) => ((d % 360) + 360) % 360;
@@ -190,26 +195,11 @@ const nearestFrame = (angles, rotation, target) => {
   return best.name;
 };
 
-// Which edge nodes of one hexagon carry an Edge. Two edge nodes at the ends of one side share it, so only one of
-// them takes an Edge: along a run of neighbouring edge-node corners every other one does, picking the alternation
-// that fits more Edges, then the one that keeps the top and bottom corners.
+// Which edge-node corners of one hexagon carry an Edge. A vertical side with edge nodes at both ends takes one
+// Edge, on its upper corner; every other edge-node corner keeps its own.
 function edgeCorners(cornerAngles) {
-  const has = new Set(cornerAngles);
-  if (has.size === 6) return new Set([90, 210, 330]);
-  const runs = [];
-  for (const a of has) {
-    if (has.has(norm(a - 60))) continue; // not the start of a run
-    const run = [a];
-    while (has.has(norm(run.at(-1) + 60))) run.push(norm(run.at(-1) + 60));
-    runs.push(run);
-  }
-  const keep = new Set();
-  for (const run of runs) {
-    const pick = (start) => run.filter((_, i) => i % 2 === start);
-    const score = (list) => list.length * 10 + list.filter((a) => a === 90 || a === 270).length;
-    const [a, b] = [pick(0), pick(1)];
-    for (const c of score(b) > score(a) ? b : a) keep.add(c);
-  }
+  const keep = new Set(cornerAngles);
+  for (const [upper, lower] of VERTICAL_SIDES) if (keep.has(upper)) keep.delete(lower);
   return keep;
 }
 
@@ -238,28 +228,9 @@ export function buildEdges(hexes, nodes, lat) {
     // the open side points straight away from the node's only hexagon
     const open = norm(deg(Math.atan2(n.z - h.z, n.x - h.x)));
 
-    // turning the node by 120° keeps its odd frames on the sides, so any odd frame can face the open side
-    const options = [0, 1, 2]
-      .map((k) => {
-        const rotation = norm(n.rotation + 120 * k);
-        return {
-          k,
-          rotation,
-          edgeFrame: nearestFrame(lat.nodeAngles, rotation, open),
-          hexFrame: nearestFrame(lat.nodeAngles, rotation, lat.frameOffset[joint.hexFrame]),
-        };
-      })
-      .filter((o) => ODD_FRAMES.includes(o.edgeFrame));
-    // prefer the standard turn, then a hexagon joint on node-1 or node-5, then the given Edge frame
-    const rank = (o, frame) => (o.k === 0 ? 4 : 0) + (HEX_RULE_FRAMES.includes(o.hexFrame) ? 2 : 0) + (o.edgeFrame === frame ? 1 : 0);
-    const best = (list, frame) => list.reduce((a, o) => (rank(o, frame) > rank(a, frame) ? o : a), list[0]);
-    // the standard choice puts the Edge on node-1 or node-3; the user's rule swaps it, so an Edge that would
-    // land on node-3 takes node-1 instead, and one that would land on node-1 takes node-3 or node-5
-    const standard = best(options.filter((o) => o.edgeFrame !== 'node-5'), 'node-3');
-    if (!standard) continue;
-    const swapped = options.filter((o) => (standard.edgeFrame === 'node-1') !== (o.edgeFrame === 'node-1'));
-    const pick = best(swapped, 'node-3');
-    if (!pick) continue;
+    const edgeFrame = EDGE_NODE_FRAME[lat.cornerOf[joint.hexFrame]];
+    const rotation = norm(open - lat.nodeAngles[edgeFrame]);
+    const pick = { rotation, edgeFrame, hexFrame: nearestFrame(lat.nodeAngles, rotation, lat.frameOffset[joint.hexFrame]) };
 
     // with hexagons excluded, two edge nodes can face each other across one side; one Edge fills it
     const side = keyOf(n.x + (lat.R / 2) * Math.cos(rad(open)), n.z + (lat.R / 2) * Math.sin(rad(open)));
