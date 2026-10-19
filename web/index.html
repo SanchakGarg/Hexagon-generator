@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hexagon Wall Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <header>
+        <h1>hexagon wall</h1>
+        <p class="sub">fill a wall with panels &amp; nodes</p>
+      </header>
+
+      <form class="panel" id="wall-form" onsubmit="return false">
+        <label for="wall-width">width</label>
+        <input id="wall-width" type="number" min="0" step="any" value="4" inputmode="decimal">
+        <label for="wall-height">height</label>
+        <input id="wall-height" type="number" min="0" step="any" value="3" inputmode="decimal">
+        <label for="wall-unit">unit</label>
+        <select id="wall-unit">
+          <option value="mm">mm</option>
+          <option value="cm">cm</option>
+          <option value="m" selected>m</option>
+          <option value="ft">ft</option>
+        </select>
+      </form>
+
+      <section class="counts" aria-label="Parts count">
+        <h2>parts count</h2>
+        <dl>
+          <div class="big"><dt>hexagons</dt><dd id="stat-hex">–</dd></div>
+          <div class="big"><dt>nodes</dt><dd id="stat-nodes">–</dd></div>
+          <div><dt><span class="key key-3way"></span>3-way</dt><dd id="stat-3way">–</dd></div>
+          <div><dt><span class="key key-2way"></span>2-way</dt><dd id="stat-2way">–</dd></div>
+          <div><dt><span class="key key-edge"></span>edge</dt><dd id="stat-edge">–</dd></div>
+          <div><dt>joints</dt><dd id="stat-joints">–</dd></div>
+          <div><dt>spare node frames</dt><dd id="stat-spare">–</dd></div>
+          <div><dt>coverage</dt><dd id="stat-coverage">–</dd></div>
+        </dl>
+        <p class="note" id="note" role="status"></p>
+      </section>
+
+      <p class="geometry" id="geometry">reading URDFs…</p>
+    </aside>
+
+    <main class="stage">
+      <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout"></svg>
+    </main>
+  </div>
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
