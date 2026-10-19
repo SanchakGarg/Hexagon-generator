@@ -269,6 +269,31 @@ h2 {
 .seg button:disabled { opacity: 0.4; cursor: default; }
 .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.toggles button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px var(--mono);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.toggles button[aria-pressed="true"] { color: var(--chalk); border-color: var(--muted); }
+.toggles button[aria-pressed="false"] { border-style: dashed; text-decoration: line-through; }
+.toggles button[aria-pressed="false"] .key { opacity: 0.3; }
+.toggles button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
 .counts dl {
   margin: 0;
   display: grid;
@@ -303,6 +328,8 @@ h2 {
 .key-2way { background: var(--violet); }
 .key-edge { background: var(--coral); }
 .key-strut { width: 14px; height: 4px; background: var(--amber); }
+.key-hex { background: var(--chalk); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); border-radius: 0; }
+.key-led { background: var(--amber); border-radius: 50%; box-shadow: 0 0 5px var(--amber); }
 
 .note {
   margin: 10px 0 0;
@@ -410,6 +437,14 @@ h2 {
 .hex.ghost:hover polygon { stroke: var(--chalk); fill: rgba(231, 226, 212, 0.08); }
 .node:hover { stroke: var(--chalk); }
 .edge:hover { fill: rgba(236, 124, 99, 0.25); stroke: var(--coral); }
+
+/* hidden layers; hexagons stay clickable through the wall-point hit test */
+.hide-hex .hex:not(.ghost):not(.selected) polygon { visibility: hidden; }
+.hide-labels .hex text { display: none; }
+.hide-3way .node-3way,
+.hide-2way .node-2way,
+.hide-edge .node-edge,
+.hide-edges .edge { display: none; }
 
 /* fallback while the meshes load, or when WebGL is unavailable */
 .flat .hex:not(.ghost) polygon { fill: rgba(240, 184, 79, 0.08); stroke: var(--amber); }

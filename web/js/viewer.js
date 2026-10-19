@@ -163,6 +163,11 @@ export async function createViewer(container, geo) {
   let hoverId = null;
   let selected = new Set();
   let lattice = null;
+  let show = {};
+  let nodeList = [];
+  let nodeMesh = null;
+  let edgeMeshes = { body: null, led: null };
+  const shown = (layer) => show[layer] !== false;
 
   function buildHexParts(hc) {
     const parts = hexTpl.parts.map((p) => {
@@ -184,6 +189,7 @@ export async function createViewer(container, geo) {
       const material = (part.led ? materials.led : materials.hexBody).clone();
       const mesh = new THREE.Mesh(part.geometry, material);
       mesh.userData.hexId = h.id;
+      mesh.visible = shown(part.led ? 'led' : 'hex');
       group.add(mesh);
       return { mesh, part, v: 0, target: 0 };
     });
@@ -320,20 +326,17 @@ export async function createViewer(container, geo) {
     };
     writeHexes();
 
-    const nc = new THREE.Vector3(lat.nodeCenter.x, 0, lat.nodeCenter.z);
-    const nodeBody = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
-    nodes.forEach((n, i) => {
-      inPlane(q, n.rotation);
-      pos.set(n.x, lat.nodeYOffset, n.z).sub(nc.clone().applyQuaternion(q));
-      nodeBody.setMatrixAt(i, m.compose(pos, q, ONE));
-      nodeBody.setColorAt(i, color.setHex(NODE_COLORS[n.kind]));
-    });
-    if (nodeBody.instanceColor) nodeBody.instanceColor.needsUpdate = true;
+    nodeList = nodes;
+    nodeMesh = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
+    nodes.forEach((n, i) => nodeMesh.setColorAt(i, color.setHex(NODE_COLORS[n.kind])));
+    if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
+    writeNodes();
 
     // each Edge is turned in-plane and slid so its edge-1 frame lands on the node frame it mates
     const anchor = new THREE.Vector3(lat.edge.anchor.x, 0, lat.edge.anchor.z);
     const edgeBody = edgeTpl.body && instanced(edgeTpl.body, materials.edgeBody, edges.length);
     const edgeLed = edgeTpl.led && instanced(edgeTpl.led, materials.led, edges.length);
+    edgeMeshes = { body: edgeBody, led: edgeLed };
     edges.forEach((e, i) => {
       inPlane(q, e.rotation);
       pos.set(e.x, lat.edge.yOffset, e.z).sub(anchor.clone().applyQuaternion(q));
@@ -355,9 +358,46 @@ export async function createViewer(container, geo) {
       fittedSize = size;
       fitPerspective(bounds);
     }
+    applyShow();
     fitOrtho();
     render();
     kick();
+  }
+
+  // nodes of a hidden kind collapse to nothing, since all kinds share one instanced mesh
+  function writeNodes() {
+    if (!nodeMesh || !lattice) return;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const pos = new THREE.Vector3();
+    const nc = new THREE.Vector3(lattice.nodeCenter.x, 0, lattice.nodeCenter.z);
+    nodeList.forEach((n, i) => {
+      if (!shown(n.kind.replace('-', ''))) {
+        nodeMesh.setMatrixAt(i, m.makeScale(0, 0, 0));
+        return;
+      }
+      inPlane(q, n.rotation);
+      pos.set(n.x, lattice.nodeYOffset, n.z).sub(nc.clone().applyQuaternion(q));
+      nodeMesh.setMatrixAt(i, m.compose(pos, q, ONE));
+    });
+    nodeMesh.instanceMatrix.needsUpdate = true;
+    // the cached bounds would otherwise cull nodes that come back after being hidden
+    nodeMesh.computeBoundingSphere();
+  }
+
+  function applyShow() {
+    if (hexMeshes.body) hexMeshes.body.visible = shown('hex');
+    if (hexMeshes.led) hexMeshes.led.visible = shown('led');
+    if (edgeMeshes.body) edgeMeshes.body.visible = shown('edges');
+    if (edgeMeshes.led) edgeMeshes.led.visible = shown('edges') && shown('led');
+    for (const session of sessions) for (const { mesh, part } of session.items) mesh.visible = shown(part.led ? 'led' : 'hex');
+  }
+
+  function setShow(next) {
+    show = { ...next };
+    applyShow();
+    writeNodes();
+    render();
   }
 
   function setHover(id) {
@@ -425,5 +465,5 @@ export async function createViewer(container, geo) {
     kick();
   }
 
-  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, wallPoint };
+  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, wallPoint };
 }

@@ -51,6 +51,23 @@
         </div>
       </section>
 
+      <section class="card" aria-labelledby="layers-title">
+        <h2 id="layers-title">show</h2>
+        <div class="toggles" role="group" aria-labelledby="layers-title" id="layers">
+          <button type="button" data-layer="hex" aria-pressed="true"><span class="key key-hex"></span>hexagons</button>
+          <button type="button" data-layer="led" aria-pressed="true"><span class="key key-led"></span>LEDs</button>
+          <button type="button" data-layer="3way" aria-pressed="true"><span class="key key-3way"></span>3-way</button>
+          <button type="button" data-layer="2way" aria-pressed="true"><span class="key key-2way"></span>2-way</button>
+          <button type="button" data-layer="edge" aria-pressed="true"><span class="key key-edge"></span>edge nodes</button>
+          <button type="button" data-layer="edges" aria-pressed="true"><span class="key key-strut"></span>Edge pieces</button>
+          <button type="button" data-layer="labels" aria-pressed="true">labels</button>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" id="show-all-btn">show all</button>
+          <button type="button" class="btn" id="hide-all-btn">hide all</button>
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="hex-title">
         <h2 id="hex-title">hexagons</h2>
         <p class="help">Click hexagons in the drawing to select them.</p>

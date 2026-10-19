@@ -24,6 +24,7 @@ const btn3d = $('view-3d');
 const excludeBtn = $('exclude-btn');
 const clearBtn = $('clear-btn');
 const restoreBtn = $('restore-btn');
+const layerButtons = [...document.querySelectorAll('#layers [data-layer]')];
 let geometry = null;
 let lattice = null;
 let unit = 'm';
@@ -35,6 +36,10 @@ let viewer = null;
 const keyOf = (h) => `${h.row}:${h.col}`;
 const selected = new Set();
 const excluded = new Set();
+
+// which kinds of part are drawn; hidden parts still count and hexagons stay clickable
+const LAYERS = layerButtons.map((b) => b.dataset.layer);
+const show = Object.fromEntries(LAYERS.map((l) => [l, true]));
 let gridHexes = [];
 
 // 2D zoom state: the overlay's base viewBox, a zoom factor and the visible center, all in SVG units
@@ -238,6 +243,27 @@ function setView(next) {
   }
 }
 
+function applyLayers() {
+  for (const b of layerButtons) b.setAttribute('aria-pressed', String(show[b.dataset.layer]));
+  for (const l of LAYERS) svg.classList.toggle(`hide-${l}`, !show[l]);
+  viewer?.setShow(show);
+}
+
+for (const b of layerButtons) {
+  b.addEventListener('click', () => {
+    show[b.dataset.layer] = !show[b.dataset.layer];
+    applyLayers();
+  });
+}
+$('show-all-btn').addEventListener('click', () => {
+  for (const l of LAYERS) show[l] = true;
+  applyLayers();
+});
+$('hide-all-btn').addEventListener('click', () => {
+  for (const l of LAYERS) show[l] = false;
+  applyLayers();
+});
+
 btn2d.addEventListener('click', () => setView('2d'));
 btn3d.addEventListener('click', () => setView('3d'));
 
@@ -360,6 +386,7 @@ async function startViewer() {
   svg.classList.remove('flat');
   btn3d.disabled = false;
   wire3d(viewer.canvas);
+  viewer.setShow(show);
   if (lastLayout) update();
   setView(location.hash === '#3d' ? '3d' : view);
 }
