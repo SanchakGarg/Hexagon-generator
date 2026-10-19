@@ -1,0 +1,124 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/ae3c4bc9d8cc7b8f7518de1a/w/d6007c6de47a2ddbff2b177c/e/4c8b76bad8f95189119cdb2d -->
+<robot name="Edge">
+  <!-- Link node_assembly -->
+  <link name="node_assembly">
+    <inertial>
+      <origin xyz="-0.0328933 -0.017621 0.00944936" rpy="0 0 0"/>
+      <mass value="0.211396"/>
+      <inertia ixx="0.00123929" ixy="-2.27215e-06" ixz="0.00210937" iyy="0.00490534" iyz="-1.31211e-06" izz="0.00368069"/>
+    </inertial>
+    <!-- Part led_channel -->
+    <visual>
+      <origin xyz="-0.163487 -0.015206 0.0840451" rpy="0 0.523599 0"/>
+      <geometry>
+        <mesh filename="package://assets/led_channel.stl"/>
+      </geometry>
+      <material name="led_channel_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.163487 -0.015206 0.0840451" rpy="0 0.523599 0"/>
+      <geometry>
+        <mesh filename="package://assets/led_channel.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part led_channel_2 -->
+    <visual>
+      <origin xyz="0.0963203 -0.015206 -0.0659549" rpy="3.14159 -0.523599 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/led_channel.stl"/>
+      </geometry>
+      <material name="led_channel_2_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0963203 -0.015206 -0.0659549" rpy="3.14159 -0.523599 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/led_channel.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bottom_plate_cover -->
+    <visual>
+      <origin xyz="-0.0335954 0.002794 0.00903417" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate_cover.stl"/>
+      </geometry>
+      <material name="bottom_plate_cover_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0335954 0.002794 0.00903417" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate_cover.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part top_plate -->
+    <visual>
+      <origin xyz="-0.0337699 -0.032806 0.00904513" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/top_plate.stl"/>
+      </geometry>
+      <material name="top_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0337699 -0.032806 0.00904513" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/top_plate.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_plate -->
+    <visual>
+      <origin xyz="-0.0335835 -0.009206 0.00904513" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/middle_plate.stl"/>
+      </geometry>
+      <material name="middle_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0335835 -0.009206 0.00904513" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/middle_plate.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bottom_plate -->
+    <visual>
+      <origin xyz="-0.0335891 0.002794 0.00902348" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate.stl"/>
+      </geometry>
+      <material name="bottom_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0335891 0.002794 0.00902348" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Frame edge-1 (dummy link + fixed joint) -->
+  <link name="edge-1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="edge-1_frame" type="fixed">
+    <origin xyz="0.204573 -0.015206 -0.128455" rpy="2.0944 -0 1.5708"/>
+    <parent link="node_assembly"/>
+    <child link="edge-1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+</robot>

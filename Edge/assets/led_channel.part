@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "ae3c4bc9d8cc7b8f7518de1a",
+    "documentMicroversion": "97fd442cbb73efe90534c755",
+    "elementId": "12356ab9be340e33c1359732",
+    "fullConfiguration": "default",
+    "id": "MGnktvTmfaRvYZsWn",
+    "isStandardContent": false,
+    "name": "LED Channel <2>",
+    "partId": "JHD",
+    "suppressed": false,
+    "type": "Part"
+}
