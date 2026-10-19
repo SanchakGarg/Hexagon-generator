@@ -402,6 +402,8 @@ h2 {
 }
 
 .hex { cursor: pointer; }
+.hex text { transition: opacity 0.2s; }
+.hex:not(.ghost):hover text { opacity: 0; }
 .hex.selected polygon { stroke: var(--amber); stroke-dasharray: 8 5; fill: rgba(240, 184, 79, 0.06); }
 .hex.ghost polygon { stroke: var(--muted); stroke-dasharray: 3 5; fill: rgba(138, 147, 162, 0.04); }
 .hex.ghost text { fill: var(--muted); }

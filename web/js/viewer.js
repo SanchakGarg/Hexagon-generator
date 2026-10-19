@@ -21,7 +21,7 @@ async function buildTemplate(visuals) {
       const geometry = (await loadStl(v.url)).clone();
       const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(v.rpy[0], v.rpy[1], v.rpy[2], 'ZYX'));
       geometry.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...v.xyz), rotation, ONE));
-      return { led: v.part.startsWith('led'), geometry, rgba: v.rgba };
+      return { led: v.part.startsWith('led'), geometry, rgba: v.rgba, xyz: v.xyz };
     }),
   );
   const merge = (list) => (list.length ? mergeGeometries(list.map((p) => p.geometry)) : null);
@@ -29,6 +29,7 @@ async function buildTemplate(visuals) {
     body: merge(parts.filter((p) => !p.led)),
     led: merge(parts.filter((p) => p.led)),
     rgba: parts.find((p) => !p.led)?.rgba ?? [0.4, 0.4, 0.4, 1],
+    parts,
   };
 }
 
@@ -135,68 +136,130 @@ export async function createViewer(container, geo) {
 
   const render = () => renderer.render(scene, mode === '3d' ? perspective : ortho);
 
-  // --- hover raise, ripple and selection ----------------------------------------
-  const LIFT = 0.06; // meters toward the viewer at full raise
-  const GROW = 0.05; // extra scale at full raise, which is what shows in the front view
-  const WAVE = { delay: 0.11, length: 0.6, falloff: 0.5, height: 0.55 }; // s per pitch, pulse s, decay per pitch, peak
+  // --- hover ripple through one hexagon's own parts, and selection ------------------
+  // On hover the hexagon's parts come out ring by ring from its centre: the centre plate stack, the
+  // channels around it, the next plate stacks, the next channels, and so on. They stay out while hovered;
+  // moving off sends them back in the same order. Other hexagons stay put.
+  const LIFT = 0.05; // meters toward the viewer at full raise
+  const GROW = { stack: 0.45, channel: 0.1 }; // extra scale of each part about its own centre, which is what shows in 2D
+  const RING_DELAY = 0.075; // seconds between rings
+  const EASE = 12; // per-second easing rate of each part
   const WHITE = new THREE.Color(0xffffff);
   const SELECTED = new THREE.Color(0xffc46b);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const raycaster = new THREE.Raycaster();
-  const tmp = { m: new THREE.Matrix4(), s: new THREE.Matrix4(), t: new THREE.Matrix4() };
 
-  let hexState = []; // { h, raise } per instance
+  // hover copies live outside `root`, which update() clears
+  const hoverRoot = new THREE.Group();
+  hoverRoot.rotation.x = -Math.PI / 2;
+  scene.add(hoverRoot);
+
+  let hexList = [];
   let hexMeshes = { body: null, led: null };
-  let waves = []; // { x, z, t0 } ripples spreading from a hovered hexagon
+  let hexParts = null; // { parts: [{ geometry, led, center, ring }], rings }
+  let sessions = []; // one per hexagon that is coming out or settling back
   let hoverId = null;
   let selected = new Set();
   let lattice = null;
 
-  function waveAt(h, now) {
-    let amp = 0;
-    for (const w of waves) {
-      const d = Math.hypot(h.x - w.x, h.z - w.z) / lattice.pitch;
-      const s = (now - w.t0) / 1000 - d * WAVE.delay;
-      if (s > 0 && s < WAVE.length) amp += WAVE.height * Math.exp(-WAVE.falloff * d) * Math.sin((Math.PI * s) / WAVE.length);
-    }
-    return amp;
+  function buildHexParts(hc) {
+    const parts = hexTpl.parts.map((p) => {
+      const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
+      return { geometry: p.geometry, led: p.led, center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
+    });
+    // 2 cm buckets: centre stack, inner channels, inner stacks, mid channels, outer stacks, outer channels
+    const bucket = (d) => Math.round(d * 50);
+    const levels = [...new Set(parts.map((p) => bucket(p.d)))].sort((x, y) => x - y);
+    for (const p of parts) p.ring = levels.indexOf(bucket(p.d));
+    return { parts, rings: levels.length };
   }
 
-  function writeHexes(now) {
+  function openSession(h) {
+    const hc = lattice.hexCenter;
+    const group = new THREE.Group();
+    group.position.set(h.x - hc.x, 0, h.z - hc.z);
+    const items = hexParts.parts.map((part) => {
+      const material = (part.led ? materials.led : materials.hexBody).clone();
+      const mesh = new THREE.Mesh(part.geometry, material);
+      mesh.userData.hexId = h.id;
+      group.add(mesh);
+      return { mesh, part, v: 0, target: 0 };
+    });
+    hoverRoot.add(group);
+    const session = { h, group, items, t0: performance.now(), leaveAt: null };
+    sessions.push(session);
+    return session;
+  }
+
+  function closeSession(session) {
+    hoverRoot.remove(session.group);
+    for (const { mesh } of session.items) mesh.material.dispose();
+  }
+
+  const tint = (id) => (selected.has(id) ? SELECTED : WHITE);
+
+  function applySession(session) {
+    const bodyBase = materials.hexBody.color.clone().multiply(tint(session.h.id));
+    for (const { mesh, part, v } of session.items) {
+      const k = 1 + (part.led ? GROW.channel : GROW.stack) * v;
+      const c = part.center;
+      mesh.scale.setScalar(k);
+      // grow about the part's own centre, then lift it off the wall toward the viewer (URDF -Y)
+      mesh.position.set(c.x * (1 - k), c.y * (1 - k) - LIFT * v, c.z * (1 - k));
+      if (part.led) mesh.material.emissiveIntensity = materials.led.emissiveIntensity * (1 + 2.5 * v);
+      else mesh.material.color.copy(bodyBase).multiplyScalar(1 + 1.1 * v);
+    }
+  }
+
+  // the static instance of a hexagon is hidden while its parts are out as separate meshes
+  function writeHexes() {
     const { body, led } = hexMeshes;
     if (!body || !lattice) return;
     const hc = lattice.hexCenter;
-    hexState.forEach(({ h, raise }, i) => {
-      const amp = Math.max(raise, waveAt(h, now));
-      const k = 1 + GROW * amp;
-      // scale about the hexagon's own center, then lift it off the wall toward the viewer (URDF -Y)
-      tmp.m.makeTranslation(-hc.x, -hc.y, -hc.z);
-      tmp.m.premultiply(tmp.s.makeScale(k, k, k));
-      tmp.m.premultiply(tmp.t.makeTranslation(h.x, hc.y - LIFT * amp, h.z));
-      body.setMatrixAt(i, tmp.m);
-      led?.setMatrixAt(i, tmp.m);
-      body.setColorAt(i, selected.has(h.id) ? SELECTED : WHITE);
+    const out = new Set(sessions.map((s) => s.h.id));
+    const m = new THREE.Matrix4();
+    hexList.forEach((h, i) => {
+      if (out.has(h.id)) m.makeScale(0, 0, 0);
+      else m.makeTranslation(h.x - hc.x, 0, h.z - hc.z);
+      body.setMatrixAt(i, m);
+      led?.setMatrixAt(i, m);
+      body.setColorAt(i, tint(h.id));
     });
     body.instanceMatrix.needsUpdate = true;
     if (body.instanceColor) body.instanceColor.needsUpdate = true;
     if (led) led.instanceMatrix.needsUpdate = true;
   }
 
-  // eases each hexagon toward its hover target; true while anything is still moving
+  // advances every session; true while anything is still moving
   function animate(now, dt) {
+    if (!hexParts) return false;
     const still = reduceMotion.matches;
-    if (still) waves = [];
-    const maxD = 40;
-    waves = waves.filter((w) => (now - w.t0) / 1000 < maxD * WAVE.delay + WAVE.length);
-    let moving = waves.length > 0;
-    const ease = 1 - Math.exp(-dt * 10);
-    for (const st of hexState) {
-      const target = st.h.id === hoverId ? 1 : 0;
-      st.raise = still ? target : st.raise + (target - st.raise) * ease;
-      if (Math.abs(target - st.raise) > 0.001) moving = true;
-      else st.raise = target;
+    const ease = still ? 1 : 1 - Math.exp(-dt * EASE);
+    let moving = false;
+    const done = [];
+    for (const session of sessions) {
+      const leaving = session.leaveAt !== null;
+      const elapsed = (now - (leaving ? session.leaveAt : session.t0)) / 1000;
+      let settled = true;
+      for (const item of session.items) {
+        const ring = item.part.ring;
+        // both ways run centre first: centre stack, its channels, the next stacks, and so on
+        const delay = still ? 0 : ring * RING_DELAY;
+        if (elapsed >= delay) item.target = leaving ? 0 : 1;
+        else settled = false;
+        item.v += (item.target - item.v) * ease;
+        if (Math.abs(item.target - item.v) < 0.001) item.v = item.target;
+        else settled = false;
+      }
+      applySession(session);
+      if (!settled) moving = true;
+      else if (leaving) done.push(session);
     }
-    writeHexes(now);
+    if (done.length) {
+      done.forEach(closeSession);
+      sessions = sessions.filter((s) => !done.includes(s));
+      writeHexes();
+    }
     return moving;
   }
 
@@ -233,14 +296,23 @@ export async function createViewer(container, geo) {
     const pos = new THREE.Vector3();
     const color = new THREE.Color();
 
-    const previous = new Map(hexState.map((st) => [st.h.id, st.raise]));
-    hexState = hexes.map((h) => ({ h, raise: previous.get(h.id) ?? 0 }));
-    if (!hexes.some((h) => h.id === hoverId)) hoverId = null;
+    hexParts ??= buildHexParts(lat.hexCenter);
+    hexList = hexes;
+    const byId = new Map(hexes.map((h) => [h.id, h]));
+    if (!byId.has(hoverId)) hoverId = null;
+    // drop parts of hexagons that left the layout; follow the rest if they moved
+    for (const session of sessions.filter((s) => !byId.has(s.h.id))) closeSession(session);
+    sessions = sessions.filter((s) => byId.has(s.h.id));
+    for (const session of sessions) {
+      session.h = byId.get(session.h.id);
+      session.group.position.set(session.h.x - lat.hexCenter.x, 0, session.h.z - lat.hexCenter.z);
+      applySession(session);
+    }
     hexMeshes = {
       body: instanced(hexTpl.body, materials.hexBody, hexes.length),
       led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length),
     };
-    writeHexes(performance.now());
+    writeHexes();
 
     const nc = new THREE.Vector3(lat.nodeCenter.x, 0, lat.nodeCenter.z);
     const nodeBody = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
@@ -283,28 +355,41 @@ export async function createViewer(container, geo) {
   }
 
   function setHover(id) {
-    if (id === hoverId) return;
+    if (id === hoverId || !hexParts) return;
+    const now = performance.now();
+    for (const session of sessions) if (session.h.id === hoverId && session.leaveAt === null) session.leaveAt = now;
     hoverId = id;
-    const st = id && hexState.find((s) => s.h.id === id);
-    if (st && !reduceMotion.matches) waves.push({ x: st.h.x, z: st.h.z, t0: performance.now() });
+    const h = id && hexList.find((x) => x.id === id);
+    if (h) {
+      const existing = sessions.find((s) => s.h.id === id);
+      if (existing) {
+        existing.leaveAt = null;
+        existing.t0 = now;
+      } else {
+        applySession(openSession(h));
+        writeHexes();
+      }
+    }
     kick();
   }
 
   function setSelected(ids) {
     selected = new Set(ids);
-    writeHexes(performance.now());
+    writeHexes();
+    sessions.forEach(applySession);
     render();
   }
 
   // hexagon under a screen point, for the 3D view where the SVG overlay is hidden
   function pick(clientX, clientY) {
     const { body } = hexMeshes;
-    if (!body || !hexState.length) return null;
+    if (!body || !hexList.length) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, mode === '3d' ? perspective : ortho);
-    const hit = raycaster.intersectObject(body, false)[0];
-    return hit ? hexState[hit.instanceId].h.id : null;
+    const hit = raycaster.intersectObjects([body, hoverRoot], true)[0];
+    if (!hit) return null;
+    return hit.object === body ? hexList[hit.instanceId].id : hit.object.userData.hexId ?? null;
   }
 
   function setViewBox(box) {
