@@ -6,10 +6,9 @@ const ANCHORS = {
   down: { hexFrame: '22', nodeFrame: 'node-1' },
 };
 const UP_CORNERS = new Set([30, 150, 270]);
-// Edge pieces close open honeycomb sides: edge-1 mates whichever free node frame points along the side,
-// trying node-1 first.
+// Every edge node (one hexagon) gets an Edge on its open side; edge-1 mates node-1 or node-5 there.
 const EDGE_FRAME = 'edge-1';
-const EDGE_NODE_FRAMES = ['node-1', 'node-3', 'node-5'];
+const EDGE_NODE_FRAMES = ['node-1', 'node-5'];
 
 const rad = (d) => (d * Math.PI) / 180;
 const norm = (d) => ((d % 360) + 360) % 360;
@@ -85,6 +84,7 @@ export function deriveLattice(hexFrames, nodeFrames, nodeBodyRadius) {
     nodeAngles,
     nodeRotation,
     residual,
+    frameOffset,
     hexCenter: hc,
     nodeCenter: nc,
     // shift that puts node frames in the same thickness plane as hexagon frames
@@ -179,51 +179,61 @@ export function buildNodes(hexes, lat) {
   return nodes;
 }
 
-export function buildEdges(hexes, nodes, lat, W, H) {
+const nearestFrame = (angles, rotation, target) => {
+  let best = null;
+  for (const [name, a] of Object.entries(angles)) {
+    const d = angleDiff(a + rotation, target);
+    if (!best || d < best.d) best = { name, d };
+  }
+  return best.name;
+};
+
+export function buildEdges(hexes, nodes, lat) {
   if (!lat.edge) return [];
-  const { R, r } = lat;
-  const keyOf = (x, z) => `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
-  const hexAt = new Set(hexes.map((h) => keyOf(h.x, h.z)));
-  const apothem = (R * Math.sqrt(3)) / 2;
-  const eps = 1e-6;
-  const covered = new Set();
+  const { r } = lat;
+  const hexById = new Map(hexes.map((h) => [h.id, h]));
+  const allNodeFrames = Object.keys(lat.nodeAngles).sort();
   const edges = [];
 
   for (const n of nodes) {
-    for (const nodeFrame of EDGE_NODE_FRAMES) {
-      if (!n.spare.includes(nodeFrame)) continue;
-      const a = norm(lat.nodeAngles[nodeFrame] + n.rotation);
-      const ux = Math.cos(rad(a));
-      const uz = Math.sin(rad(a));
+    if (n.kind !== 'edge') continue;
+    const joint = n.joints[0];
+    const h = hexById.get(joint.hexId);
+    // the open side points straight away from the node's only hexagon
+    const open = norm(deg(Math.atan2(n.z - h.z, n.x - h.x)));
 
-      // the side is already built when a placed hexagon owns it, or claimed when an Edge from its other end took it
-      const mx = n.x + (R / 2) * ux;
-      const mz = n.z + (R / 2) * uz;
-      const side = keyOf(mx, mz);
-      if (covered.has(side)) continue;
-      if ([1, -1].some((s) => hexAt.has(keyOf(mx - s * apothem * uz, mz + s * apothem * ux)))) continue;
-
-      const tipX = n.x + (r + lat.edge.length) * ux;
-      const tipZ = n.z + (r + lat.edge.length) * uz;
-      if (tipX < -eps || tipX > W + eps || tipZ < -eps || tipZ > H + eps) continue;
-
-      const edge = {
-        id: `E${edges.length + 1}`,
-        nodeId: n.id,
-        edgeFrame: EDGE_FRAME,
-        nodeFrame,
-        x: n.x + r * ux,
-        z: n.z + r * uz,
-        angle: a,
-        rotation: norm(a - lat.edge.axisAngle),
-        tipX,
-        tipZ,
-      };
-      covered.add(side);
-      edges.push(edge);
-      n.edges = [...(n.edges ?? []), edge.id];
-      n.spare = n.spare.filter((f) => f !== nodeFrame);
+    // turning the node by 120° keeps its odd frames on the sides; pick the turn that puts node-1 or node-5
+    // on the open side, preferring the standard turn, then one that also mates the hexagon with node-1 or node-5
+    let pick = null;
+    for (const k of [0, 1, 2]) {
+      const rotation = norm(n.rotation + 120 * k);
+      const edgeFrame = nearestFrame(lat.nodeAngles, rotation, open);
+      if (!EDGE_NODE_FRAMES.includes(edgeFrame)) continue;
+      const hexFrame = nearestFrame(lat.nodeAngles, rotation, lat.frameOffset[joint.hexFrame]);
+      const score = (k === 0 ? 2 : 0) + (EDGE_NODE_FRAMES.includes(hexFrame) ? 1 : 0);
+      if (!pick || score > pick.score) pick = { rotation, edgeFrame, hexFrame, score };
     }
+    if (!pick) continue;
+
+    n.rotation = pick.rotation;
+    joint.nodeFrame = pick.hexFrame;
+    const ux = Math.cos(rad(open));
+    const uz = Math.sin(rad(open));
+    const edge = {
+      id: `E${edges.length + 1}`,
+      nodeId: n.id,
+      edgeFrame: EDGE_FRAME,
+      nodeFrame: pick.edgeFrame,
+      x: n.x + r * ux,
+      z: n.z + r * uz,
+      angle: open,
+      rotation: norm(open - lat.edge.axisAngle),
+      tipX: n.x + (r + lat.edge.length) * ux,
+      tipZ: n.z + (r + lat.edge.length) * uz,
+    };
+    edges.push(edge);
+    n.edges = [edge.id];
+    n.spare = allNodeFrames.filter((f) => f !== joint.nodeFrame && f !== edge.nodeFrame);
   }
   return edges;
 }

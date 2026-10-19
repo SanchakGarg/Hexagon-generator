@@ -67,7 +67,7 @@ function update() {
 
   const hexes = fitWall(W, H, lattice);
   const nodes = buildNodes(hexes, lattice);
-  const edges = buildEdges(hexes, nodes, lattice, W, H);
+  const edges = buildEdges(hexes, nodes, lattice);
   const s = summarize(W, H, hexes, nodes, lattice, edges);
   lastLayout = { W, H, hexes, nodes, edges, lat: lattice };
   baseBox = renderWall(svg, { ...lastLayout, formatLength });

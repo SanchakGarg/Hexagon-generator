@@ -99,12 +99,16 @@ export async function createViewer(container, geo) {
     return mesh;
   }
 
-  function fitPerspective(W, H) {
+  function fitPerspective({ minX, maxX, minZ, maxZ }) {
+    const W = maxX - minX;
+    const H = maxZ - minZ;
+    const cx = (minX + maxX) / 2;
+    const cy = (minZ + maxZ) / 2;
     const aspect = perspective.aspect || 1;
     const fov = THREE.MathUtils.degToRad(perspective.fov);
     const dist = (Math.max(H, W / aspect) / 2 / Math.tan(fov / 2)) * 1.2;
-    controls.target.set(W / 2, H / 2, 0);
-    perspective.position.set(W / 2 + dist * 0.18, H / 2 - dist * 0.12, dist);
+    controls.target.set(cx, cy, 0);
+    perspective.position.set(cx + dist * 0.18, cy - dist * 0.12, dist);
     perspective.near = dist / 200;
     perspective.far = dist * 20;
     perspective.updateProjectionMatrix();
@@ -178,10 +182,18 @@ export async function createViewer(container, geo) {
       edgeLed?.setMatrixAt(i, m);
     });
 
-    const size = `${W}x${H}`;
+    // frame the wall plus any Edges that overhang it
+    const bounds = { minX: 0, maxX: W, minZ: 0, maxZ: H };
+    for (const e of edges) {
+      bounds.minX = Math.min(bounds.minX, e.tipX);
+      bounds.maxX = Math.max(bounds.maxX, e.tipX);
+      bounds.minZ = Math.min(bounds.minZ, e.tipZ);
+      bounds.maxZ = Math.max(bounds.maxZ, e.tipZ);
+    }
+    const size = Object.values(bounds).map((v) => v.toFixed(4)).join(',');
     if (size !== fittedSize) {
       fittedSize = size;
-      fitPerspective(W, H);
+      fitPerspective(bounds);
     }
     fitOrtho();
     render();

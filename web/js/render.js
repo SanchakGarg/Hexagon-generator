@@ -36,14 +36,27 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, lat, formatLength }
   const nodeR = Math.max(lat.rho, size * 0.007);
   const y = (z) => H - z;
 
-  const viewBox = { x: -pad, y: -pad * 0.5, w: W + pad * 1.5, h: H + pad * 1.5 };
+  // Edges may overhang the wall, so frame the wall plus every Edge tip
+  const ext = { minX: 0, maxX: W, minY: 0, maxY: H };
+  for (const e of edges) {
+    ext.minX = Math.min(ext.minX, e.tipX);
+    ext.maxX = Math.max(ext.maxX, e.tipX);
+    ext.minY = Math.min(ext.minY, y(e.tipZ));
+    ext.maxY = Math.max(ext.maxY, y(e.tipZ));
+  }
+  const viewBox = {
+    x: ext.minX - pad,
+    y: ext.minY - pad * 0.5,
+    w: ext.maxX - ext.minX + pad * 1.5,
+    h: ext.maxY - ext.minY + pad * 1.5,
+  };
 
   const parts = [];
   parts.push(`<rect class="wall" x="0" y="0" width="${fmt(W)}" height="${fmt(H)}"/>`);
 
   const tick = size * 0.015;
-  const dy = H + pad * 0.45;
-  const dx = -pad * 0.45;
+  const dy = ext.maxY + pad * 0.45;
+  const dx = ext.minX - pad * 0.45;
   parts.push(`<g class="dim">
     <line x1="0" y1="${fmt(dy)}" x2="${fmt(W)}" y2="${fmt(dy)}"/>
     <line x1="0" y1="${fmt(dy - tick)}" x2="0" y2="${fmt(dy + tick)}"/>
