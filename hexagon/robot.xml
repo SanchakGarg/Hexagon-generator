@@ -1,0 +1,242 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/ae3c4bc9d8cc7b8f7518de1a/w/d6007c6de47a2ddbff2b177c/e/7df923a4127deb9f7b4c6c73 -->
+<mujoco model="Hexagon">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="Hexagon">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link node_assembly -->
+    <body name="node_assembly" pos="0 0 0" quat="1 0 0 0" childclass="Hexagon">
+      <inertial pos="-0.0108212 -0.0139277 -0.00475493" mass="2.46631" fullinertia="0.19543 0.390712 0.195433 -3.30157e-06 -2.5123e-06 -1.48018e-06"/>
+      <!-- Part led_channel -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113248 -0.52979" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113248 -0.52979" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_2 -->
+      <geom type="mesh" class="visual" pos="0.508735 -0.0113181 -0.15479" quat="0.707107 -0 -0.707107 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.508735 -0.0113181 -0.15479" quat="0.707107 -0 -0.707107 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_3 -->
+      <geom type="mesh" class="visual" pos="-0.400592 -0.0113248 -0.37979" quat="0.965926 0 0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.400592 -0.0113248 -0.37979" quat="0.965926 0 0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_4 -->
+      <geom type="mesh" class="visual" pos="-0.0108803 -0.0113215 0.14521" quat="0.707107 0 0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108803 -0.0113215 0.14521" quat="0.707107 0 0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_5 -->
+      <geom type="mesh" class="visual" pos="0.119023 -0.0113215 -0.37979" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.119023 -0.0113215 -0.37979" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_6 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.0188248 0.29521" quat="0 -0.707107 0 -0.707107" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.0188248 0.29521" quat="0 -0.707107 0 -0.707107" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_7 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.0113215 -0.30479" quat="0.707107 -0 -0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.0113215 -0.30479" quat="0.707107 -0 -0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_8 -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113215 -0.0797896" quat="0.258819 -0 0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113215 -0.0797896" quat="0.258819 -0 0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_9 -->
+      <geom type="mesh" class="visual" pos="0.119023 -0.0113215 0.37021" quat="0.258819 -0 0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.119023 -0.0113215 0.37021" quat="0.258819 -0 0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_10 -->
+      <geom type="mesh" class="visual" pos="0.119023 -0.0113215 -0.0797896" quat="0.965926 -0 0.258819 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.119023 -0.0113215 -0.0797896" quat="0.965926 -0 0.258819 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_11 -->
+      <geom type="mesh" class="visual" pos="0.119023 -0.0113181 0.0702104" quat="0.965926 0 -0.258819 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.119023 -0.0113181 0.0702104" quat="0.965926 0 -0.258819 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_12 -->
+      <geom type="mesh" class="visual" pos="0.508735 -0.0188181 0.14521" quat="0 -0.707107 -0 0.707107" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.508735 -0.0188181 0.14521" quat="0 -0.707107 -0 0.707107" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_13 -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113215 -0.37979" quat="0.965926 -0 -0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113215 -0.37979" quat="0.965926 -0 -0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_14 -->
+      <geom type="mesh" class="visual" pos="0.248927 -0.0188248 -0.30479" quat="0 0.707107 0 0.707107" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.248927 -0.0188248 -0.30479" quat="0 0.707107 0 0.707107" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_15 -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113215 0.0702104" quat="0.258819 -0 -0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113215 0.0702104" quat="0.258819 -0 -0.965926 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_16 -->
+      <geom type="mesh" class="visual" pos="-0.400592 -0.0113248 0.37021" quat="0.965926 -0 -0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.400592 -0.0113248 0.37021" quat="0.965926 -0 -0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_17 -->
+      <geom type="mesh" class="visual" pos="0.378831 -0.0188181 0.0702104" quat="0 0.258819 0 0.965926" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.378831 -0.0188181 0.0702104" quat="0 0.258819 0 0.965926" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_18 -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113248 0.52021" quat="0.258819 0 0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113248 0.52021" quat="0.258819 0 0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_19 -->
+      <geom type="mesh" class="visual" pos="-0.0108803 -0.0113215 -0.15479" quat="0.707107 0 0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108803 -0.0113215 -0.15479" quat="0.707107 0 0.707107 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_20 -->
+      <geom type="mesh" class="visual" pos="0.378831 -0.0188248 -0.0797896" quat="0 0.258819 0 -0.965926" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.378831 -0.0188248 -0.0797896" quat="0 0.258819 0 -0.965926" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_21 -->
+      <geom type="mesh" class="visual" pos="-0.140784 -0.0113215 0.37021" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.140784 -0.0113215 0.37021" quat="0.258819 0 -0.965926 0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_22 -->
+      <geom type="mesh" class="visual" pos="0.248927 -0.0113181 0.29521" quat="0.707107 -0 0.707107 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="0.248927 -0.0113181 0.29521" quat="0.707107 -0 0.707107 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_23 -->
+      <geom type="mesh" class="visual" pos="-0.400592 -0.0188248 0.0702105" quat="0 -0.258819 -0 0.965926" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.400592 -0.0188248 0.0702105" quat="0 -0.258819 -0 0.965926" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part led_channel_24 -->
+      <geom type="mesh" class="visual" pos="-0.400592 -0.0113215 -0.0797896" quat="0.965926 -0 0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <geom type="mesh" class="collision" pos="-0.400592 -0.0113215 -0.0797896" quat="0.965926 -0 0.258819 -0" mesh="led_channel" material="led_channel_material"/>
+      <!-- Part bottom_plate_cover -->
+      <geom type="mesh" class="visual" pos="-0.0108922 0.00667855 -0.00480053" quat="1 0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108922 0.00667855 -0.00480053" quat="1 0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate -->
+      <geom type="mesh" class="visual" pos="-0.0110667 -0.0289215 -0.00478957" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0110667 -0.0289215 -0.00478957" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate -->
+      <geom type="mesh" class="visual" pos="-0.0108803 -0.00532145 -0.00478957" quat="0.5 0 0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108803 -0.00532145 -0.00478957" quat="0.5 0 0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate -->
+      <geom type="mesh" class="visual" pos="-0.010886 0.00667855 -0.00481122" quat="1 0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.010886 0.00667855 -0.00481122" quat="1 0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_2 -->
+      <geom type="mesh" class="visual" pos="0.50875 0.00668192 -0.00479441" quat="0.5 -0 -0.866025 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="0.50875 0.00668192 -0.00479441" quat="0.5 -0 -0.866025 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_2 -->
+      <geom type="mesh" class="visual" pos="0.508828 -0.0289181 -0.00495104" quat="1 -0 -0 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.508828 -0.0289181 -0.00495104" quat="1 -0 -0 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_2 -->
+      <geom type="mesh" class="visual" pos="0.508735 -0.00531808 -0.00478961" quat="1 0 -0 0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.508735 -0.00531808 -0.00478961" quat="1 0 -0 0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_2 -->
+      <geom type="mesh" class="visual" pos="0.508756 0.00668192 -0.00478366" quat="0.5 -0 -0.866025 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.508756 0.00668192 -0.00478366" quat="0.5 -0 -0.866025 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_3 -->
+      <geom type="mesh" class="visual" pos="-0.270691 0.00667518 0.445226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.270691 0.00667518 0.445226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_3 -->
+      <geom type="mesh" class="visual" pos="-0.270595 -0.0289248 0.445372" quat="0.5 0 -0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270595 -0.0289248 0.445372" quat="0.5 0 -0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_3 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.00532482 0.44521" quat="0.5 0 -0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.00532482 0.44521" quat="0.5 0 -0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_3 -->
+      <geom type="mesh" class="visual" pos="-0.270704 0.00667518 0.445226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270704 0.00667518 0.445226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_4 -->
+      <geom type="mesh" class="visual" pos="0.248943 0.00667518 -0.154794" quat="0.5 -0 -0.866025 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="0.248943 0.00667518 -0.154794" quat="0.5 -0 -0.866025 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_4 -->
+      <geom type="mesh" class="visual" pos="0.24902 -0.0289248 -0.154951" quat="1 0 0 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.24902 -0.0289248 -0.154951" quat="1 0 0 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_4 -->
+      <geom type="mesh" class="visual" pos="0.248927 -0.00532482 -0.15479" quat="1 -0 -0 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.248927 -0.00532482 -0.15479" quat="1 -0 -0 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_4 -->
+      <geom type="mesh" class="visual" pos="0.248949 0.00667518 -0.154784" quat="0.5 0 -0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.248949 0.00667518 -0.154784" quat="0.5 0 -0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_5 -->
+      <geom type="mesh" class="visual" pos="-0.270703 0.00667518 0.145215" quat="0.866025 -0 0.5 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.270703 0.00667518 0.145215" quat="0.866025 -0 0.5 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_5 -->
+      <geom type="mesh" class="visual" pos="-0.270781 -0.0289248 0.145372" quat="0 0 1 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270781 -0.0289248 0.145372" quat="0 0 1 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_5 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.00532482 0.14521" quat="0 -0 1 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.00532482 0.14521" quat="0 -0 1 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_5 -->
+      <geom type="mesh" class="visual" pos="-0.27071 0.00667518 0.145205" quat="0.866025 -0 0.5 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.27071 0.00667518 0.145205" quat="0.866025 -0 0.5 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_6 -->
+      <geom type="mesh" class="visual" pos="-0.0108768 0.00667855 -0.304805" quat="0.866025 0 -0.5 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108768 0.00667855 -0.304805" quat="0.866025 0 -0.5 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_6 -->
+      <geom type="mesh" class="visual" pos="-0.0109735 -0.0289215 -0.304951" quat="0.866025 -0 0.5 -0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0109735 -0.0289215 -0.304951" quat="0.866025 -0 0.5 -0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_6 -->
+      <geom type="mesh" class="visual" pos="-0.0108803 -0.00532145 -0.30479" quat="0.866025 -0 0.5 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108803 -0.00532145 -0.30479" quat="0.866025 -0 0.5 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_6 -->
+      <geom type="mesh" class="visual" pos="-0.0108644 0.00667855 -0.304805" quat="0.866025 0 -0.5 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108644 0.00667855 -0.304805" quat="0.866025 0 -0.5 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_7 -->
+      <geom type="mesh" class="visual" pos="-0.0108839 0.00667855 0.295226" quat="0.5 0 0.866025 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108839 0.00667855 0.295226" quat="0.5 0 0.866025 -0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_7 -->
+      <geom type="mesh" class="visual" pos="-0.0107871 -0.0289215 0.295372" quat="0.5 -0 -0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0107871 -0.0289215 0.295372" quat="0.5 -0 -0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_7 -->
+      <geom type="mesh" class="visual" pos="-0.0108803 -0.00532145 0.29521" quat="0.5 -0 -0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108803 -0.00532145 0.29521" quat="0.5 -0 -0.866025 0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_7 -->
+      <geom type="mesh" class="visual" pos="-0.0108963 0.00667855 0.295226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.0108963 0.00667855 0.295226" quat="0.5 -0 0.866025 -0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_8 -->
+      <geom type="mesh" class="visual" pos="0.248939 0.00668192 0.145221" quat="0 0 -1 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="0.248939 0.00668192 0.145221" quat="0 0 -1 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_8 -->
+      <geom type="mesh" class="visual" pos="0.249114 -0.0289181 0.14521" quat="0.866025 0 -0.5 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.249114 -0.0289181 0.14521" quat="0.866025 0 -0.5 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_8 -->
+      <geom type="mesh" class="visual" pos="0.248927 -0.00531808 0.14521" quat="0.866025 0 -0.5 0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.248927 -0.00531808 0.14521" quat="0.866025 0 -0.5 0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_8 -->
+      <geom type="mesh" class="visual" pos="0.248933 0.00668192 0.145232" quat="0 0 1 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="0.248933 0.00668192 0.145232" quat="0 0 1 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_9 -->
+      <geom type="mesh" class="visual" pos="-0.2707 0.00667518 -0.454801" quat="1 -0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.2707 0.00667518 -0.454801" quat="1 -0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_9 -->
+      <geom type="mesh" class="visual" pos="-0.270874 -0.0289248 -0.45479" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270874 -0.0289248 -0.45479" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_9 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.00532482 -0.45479" quat="0.5 -0 0.866025 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.00532482 -0.45479" quat="0.5 -0 0.866025 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_9 -->
+      <geom type="mesh" class="visual" pos="-0.270694 0.00667518 -0.454811" quat="1 -0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270694 0.00667518 -0.454811" quat="1 -0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Part bottom_plate_cover_10 -->
+      <geom type="mesh" class="visual" pos="-0.2707 0.00667855 -0.154801" quat="1 0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <geom type="mesh" class="collision" pos="-0.2707 0.00667855 -0.154801" quat="1 0 0 0" mesh="bottom_plate_cover" material="bottom_plate_cover_material"/>
+      <!-- Part top_plate_10 -->
+      <geom type="mesh" class="visual" pos="-0.270874 -0.0289215 -0.15479" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270874 -0.0289215 -0.15479" quat="0.5 0 0.866025 0" mesh="top_plate" material="top_plate_material"/>
+      <!-- Part middle_plate_10 -->
+      <geom type="mesh" class="visual" pos="-0.270688 -0.00532145 -0.15479" quat="0.5 0 0.866025 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270688 -0.00532145 -0.15479" quat="0.5 0 0.866025 -0" mesh="middle_plate" material="middle_plate_material"/>
+      <!-- Part bottom_plate_10 -->
+      <geom type="mesh" class="visual" pos="-0.270694 0.00667855 -0.154811" quat="1 0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <geom type="mesh" class="collision" pos="-0.270694 0.00667855 -0.154811" quat="1 0 0 0" mesh="bottom_plate" material="bottom_plate_material"/>
+      <!-- Frame 11 -->
+      <site group="3" name="11" pos="0.508735 -0.0113181 0.27021" quat="0.707107 0 -0 -0.707107"/>
+      <!-- Frame 12 -->
+      <site group="3" name="12" pos="0.508735 -0.0113181 -0.27979" quat="0 0.707107 0.707107 0"/>
+      <!-- Frame 21 -->
+      <site group="3" name="21" pos="-0.032531 -0.0113248 -0.59229" quat="0.353553 0.612372 0.612372 0.353553"/>
+      <!-- Frame 22 -->
+      <site group="3" name="22" pos="-0.508845 -0.0113248 -0.31729" quat="0.612372 -0.353553 -0.353553 0.612372"/>
+      <!-- Frame 31 -->
+      <site group="3" name="31" pos="-0.508845 -0.0113248 0.30771" quat="0.353553 -0.612372 -0.612372 0.353553"/>
+      <!-- Frame 32 -->
+      <site group="3" name="32" pos="-0.032531 -0.0113248 0.58271" quat="0.612372 0.353553 0.353553 0.612372"/>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="middle_plate.stl"/>
+    <mesh file="led_channel.stl"/>
+    <mesh file="bottom_plate.stl"/>
+    <mesh file="bottom_plate_cover.stl"/>
+    <mesh file="top_plate.stl"/>
+    <material name="led_channel_material" rgba="0.4 0.4 0.4 1"/>
+    <material name="bottom_plate_cover_material" rgba="0.4 0.4 0.4 1"/>
+    <material name="top_plate_material" rgba="0.4 0.4 0.4 1"/>
+    <material name="middle_plate_material" rgba="0.4 0.4 0.4 1"/>
+    <material name="bottom_plate_material" rgba="0.4 0.4 0.4 1"/>
+  </asset>
+  <actuator/>
+  <equality/>
+</mujoco>

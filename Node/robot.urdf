@@ -1,0 +1,167 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/ae3c4bc9d8cc7b8f7518de1a/w/d6007c6de47a2ddbff2b177c/e/7754fbd9a9f55dd87bb40ca7 -->
+<robot name="Node">
+  <!-- Link middle_plate -->
+  <link name="middle_plate">
+    <inertial>
+      <origin xyz="0.00507018 -0.00985581 0.00250934" rpy="0 0 0"/>
+      <mass value="0.0352214"/>
+      <inertia ixx="1.26922e-05" ixy="-1.29788e-06" ixz="-2.17147e-06" iyy="1.87074e-05" iyz="-7.41504e-07" izz="1.52245e-05"/>
+    </inertial>
+    <!-- Part bottom_plate_cover -->
+    <visual>
+      <origin xyz="0.000915717 0.00388193 7.21891e-05" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate_cover.stl"/>
+      </geometry>
+      <material name="bottom_plate_cover_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.000915717 0.00388193 7.21891e-05" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate_cover.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part top_plate -->
+    <visual>
+      <origin xyz="0.000741191 -0.0317181 8.31502e-05" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/top_plate.stl"/>
+      </geometry>
+      <material name="top_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.000741191 -0.0317181 8.31502e-05" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/top_plate.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_plate -->
+    <visual>
+      <origin xyz="0.000927597 -0.00811807 8.31502e-05" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/middle_plate.stl"/>
+      </geometry>
+      <material name="middle_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.000927597 -0.00811807 8.31502e-05" rpy="3.14159 1.0472 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/middle_plate.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bottom_plate -->
+    <visual>
+      <origin xyz="0.000921963 0.00388193 6.1503e-05" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate.stl"/>
+      </geometry>
+      <material name="bottom_plate_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.000921963 0.00388193 6.1503e-05" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://assets/bottom_plate.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Frame node-1 (dummy link + fixed joint) -->
+  <link name="node-1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-1_frame" type="fixed">
+    <origin xyz="0.0225782 -0.0141181 0.0125832" rpy="0 1.0472 0"/>
+    <parent link="middle_plate"/>
+    <child link="node-1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame node-2 (dummy link + fixed joint) -->
+  <link name="node-2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-2_frame" type="fixed">
+    <origin xyz="0.0225782 -0.0141181 -0.0124168" rpy="3.14159 1.0472 3.14159"/>
+    <parent link="middle_plate"/>
+    <child link="node-2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame node-3 (dummy link + fixed joint) -->
+  <link name="node-3">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-3_frame" type="fixed">
+    <origin xyz="0.000927597 -0.0141181 -0.0249168" rpy="3.14159 0 3.14159"/>
+    <parent link="middle_plate"/>
+    <child link="node-3"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame node-4 (dummy link + fixed joint) -->
+  <link name="node-4">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-4_frame" type="fixed">
+    <origin xyz="-0.020723 -0.0141181 -0.0124168" rpy="3.14159 1.0472 0"/>
+    <parent link="middle_plate"/>
+    <child link="node-4"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame node-5 (dummy link + fixed joint) -->
+  <link name="node-5">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-5_frame" type="fixed">
+    <origin xyz="-0.020723 -0.0141181 0.0125832" rpy="0 1.0472 3.14159"/>
+    <parent link="middle_plate"/>
+    <child link="node-5"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame node-6 (dummy link + fixed joint) -->
+  <link name="node-6">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="node-6_frame" type="fixed">
+    <origin xyz="0.000927597 -0.0141181 0.0250832" rpy="0 0 3.14159"/>
+    <parent link="middle_plate"/>
+    <child link="node-6"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+</robot>

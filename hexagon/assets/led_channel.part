@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "ae3c4bc9d8cc7b8f7518de1a",
+    "documentMicroversion": "66b292e8d24b728ccb7ae59b",
+    "elementId": "12356ab9be340e33c1359732",
+    "fullConfiguration": "default",
+    "id": "Myfu8fSYJ2MNCVBJm",
+    "isStandardContent": false,
+    "name": "LED Channel <10>",
+    "partId": "JHD",
+    "suppressed": false,
+    "type": "Part"
+}
