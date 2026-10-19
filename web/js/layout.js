@@ -137,7 +137,10 @@ export function fitWall(W, H, lat) {
   const minShift = Math.min(...used.map((row) => row.shift));
   const maxRight = Math.max(...used.map((row) => row.shift + (row.n - 1) * pitch));
   const dx = (W - (maxRight - minShift + 2 * hw)) / 2 - minShift;
-  const dz = (H - (2 * hh + (rows - 1) * rowPitch)) / 2;
+  // centre on the rows that hold hexagons; a narrow wall leaves its shifted rows empty
+  const first = best.layout.findIndex((row) => row.n > 0);
+  const last = best.layout.findLastIndex((row) => row.n > 0);
+  const dz = (H - (2 * hh + (last - first) * rowPitch)) / 2 - first * rowPitch;
 
   const hexes = [];
   best.layout.forEach((row, i) => {
