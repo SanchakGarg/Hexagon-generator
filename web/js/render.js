@@ -13,7 +13,22 @@ function hexPoints(cx, cy, radius, rotation) {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-export function renderWall(svg, { W, H, hexes, nodes, lat, formatLength }) {
+function stripPoints(x1, y1, x2, y2, halfWidth) {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const nx = (-(y2 - y1) / len) * halfWidth;
+  const ny = ((x2 - x1) / len) * halfWidth;
+  return [
+    [x1 + nx, y1 + ny],
+    [x2 + nx, y2 + ny],
+    [x2 - nx, y2 - ny],
+    [x1 - nx, y1 - ny],
+  ]
+    .map(([px, py]) => `${fmt(px)},${fmt(py)}`)
+    .join(' ');
+}
+
+// Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
+export function renderWall(svg, { W, H, hexes, nodes, edges, lat, formatLength }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -21,7 +36,7 @@ export function renderWall(svg, { W, H, hexes, nodes, lat, formatLength }) {
   const nodeR = Math.max(lat.rho, size * 0.007);
   const y = (z) => H - z;
 
-  svg.setAttribute('viewBox', `${fmt(-pad)} ${fmt(-pad * 0.5)} ${fmt(W + pad * 1.5)} ${fmt(H + pad * 1.5)}`);
+  const viewBox = { x: -pad, y: -pad * 0.5, w: W + pad * 1.5, h: H + pad * 1.5 };
 
   const parts = [];
   parts.push(`<rect class="wall" x="0" y="0" width="${fmt(W)}" height="${fmt(H)}"/>`);
@@ -51,11 +66,20 @@ export function renderWall(svg, { W, H, hexes, nodes, lat, formatLength }) {
     </g>`);
   }
 
+  const edgesByNode = new Map();
+  for (const e of edges) {
+    const half = Math.max(0.012, size * 0.005);
+    const tip = `${e.id} · Edge\n${e.edgeFrame} ↔ ${e.nodeId}.${e.nodeFrame}\nlength ${formatLength(lat.edge.length)}`;
+    parts.push(`<polygon class="edge" data-tip="${esc(tip)}" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
+    edgesByNode.set(e.nodeId, [...(edgesByNode.get(e.nodeId) ?? []), `${e.nodeFrame} ↔ ${e.id}.${e.edgeFrame}`]);
+  }
+
   for (const n of nodes) {
-    const lines = n.joints.map((j) => `${j.nodeFrame} ↔ ${j.hexId}.${j.hexFrame}`).sort();
-    const tip = `${n.id} · ${n.kind} (${n.type} corner)\n${lines.join('\n')}\nspare: ${n.spare.join(', ')}`;
+    const lines = [...n.joints.map((j) => `${j.nodeFrame} ↔ ${j.hexId}.${j.hexFrame}`), ...(edgesByNode.get(n.id) ?? [])].sort();
+    const tip = `${n.id} · ${n.kind} (${n.type} corner)\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" data-tip="${esc(tip)}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
 
   svg.innerHTML = parts.join('');
+  return viewBox;
 }

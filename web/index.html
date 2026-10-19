@@ -46,7 +46,8 @@
           <div class="big"><dt>nodes</dt><dd id="stat-nodes">–</dd></div>
           <div><dt><span class="key key-3way"></span>3-way</dt><dd id="stat-3way">–</dd></div>
           <div><dt><span class="key key-2way"></span>2-way</dt><dd id="stat-2way">–</dd></div>
-          <div><dt><span class="key key-edge"></span>edge</dt><dd id="stat-edge">–</dd></div>
+          <div><dt><span class="key key-edge"></span>edge nodes</dt><dd id="stat-edge">–</dd></div>
+          <div><dt><span class="key key-strut"></span>Edge pieces</dt><dd id="stat-edges">–</dd></div>
           <div><dt>joints</dt><dd id="stat-joints">–</dd></div>
           <div><dt>spare node frames</dt><dd id="stat-spare">–</dd></div>
           <div><dt>coverage</dt><dd id="stat-coverage">–</dd></div>
@@ -58,9 +59,9 @@
     </aside>
 
     <main class="stage">
-      <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout"></svg>
-      <div class="stage3d" id="stage-3d" hidden>
-        <p class="hint" id="hint-3d">loading your STL meshes…</p>
+      <div class="viewport" id="viewport">
+        <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout, front view"></svg>
+        <p class="hint" id="hint">loading your STL meshes…</p>
       </div>
     </main>
   </div>
