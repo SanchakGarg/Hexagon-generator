@@ -257,6 +257,7 @@ export async function createViewer(container, geo) {
     perspective.near = dist / 200;
     perspective.far = dist * 20;
     perspective.updateProjectionMatrix();
+    orbitPose = { pos: perspective.position.clone(), target: controls.target.clone() };
     controls.update();
   }
 
@@ -278,7 +279,10 @@ export async function createViewer(container, geo) {
     ortho.updateProjectionMatrix();
   }
 
-  const render = () => renderer.render(scene, mode === '3d' ? perspective : ortho);
+  let fly = null; // camera move between the front view and the orbit view
+  let orbitPose = null; // where the orbit camera was, to return to it
+  const camera = () => (mode === '3d' || fly ? perspective : ortho);
+  const render = () => renderer.render(scene, camera());
 
   // --- hover ripple through one hexagon's own parts, and selection ------------------
   // On hover the hexagon's parts come out ring by ring from its centre: the centre plate stack, the
@@ -287,7 +291,11 @@ export async function createViewer(container, geo) {
   const LIFT = 0.16; // meters toward the viewer at full raise
   const GROW = { stack: 0.6, channel: 0.12 }; // extra scale of each part about its own centre, which is what shows in 2D
   const RING_DELAY = 0.075; // seconds between rings
-  const EASE = 10; // per-second easing rate of each part
+  // each part rides a slightly underdamped spring, so it overshoots a touch and settles: the bouncy anime feel
+  const SPRING = { k: 180, damping: 2 * Math.sqrt(180) * 0.5 };
+  // whole hexagons pop onto the wall from the centre outward, and squash away when excluded
+  const POP = { inMs: 520, outMs: 380, bumpMs: 320, stagger: 0.35 };
+  const FLY_MS = 650;
   // while hovered the raised parts keep a gentle wave running outward through the rings, never dropping to the wall
   const RIPPLE = { depth: 0.3, period: 1.4 }; // fraction of the raise, seconds per cycle
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -465,12 +473,13 @@ export async function createViewer(container, geo) {
   function applySession(session, now = performance.now()) {
     const bodyBase = tint(session.h.id);
     const still = reduceMotion.matches;
+    const bump = bumpOf(session.h.id, now) ?? 1;
     for (const item of session.items) {
       const { mesh, part, ring, v: raise } = item;
       const phase = (now - session.t0) / 1000 - ring * RING_DELAY;
       const wave = still || phase < 0 ? 0 : RIPPLE.depth * Math.sin((2 * Math.PI * phase) / RIPPLE.period);
       const v = raise * (1 + wave);
-      const k = 1 + (part.led ? GROW.channel : GROW.stack) * v;
+      const k = (1 + (part.led ? GROW.channel : GROW.stack) * v) * bump;
       const c = part.center;
       mesh.scale.setScalar(k);
       // grow about the part's own centre, then lift it off the wall toward the viewer (URDF -Y)
@@ -480,16 +489,128 @@ export async function createViewer(container, geo) {
     }
   }
 
+  // --- pops: hexagons arriving, leaving and being picked ---------------------------
+  const keyOf = (h) => `${h.row}:${h.col}`;
+  let hexById = new Map();
+  let placed = null; // where each grid position sat last update, to tell arrivals and departures apart
+  const appear = new Map(); // grid key -> start time
+  const bumps = new Map(); // hexagon id -> start time
+  let leaving = []; // { x, z, start } of hexagons that just left the layout
+  let leaveMeshes = null;
+  const easeOutBack = (p) => 1 + 2.4 * (p - 1) ** 3 + 1.4 * (p - 1) ** 2;
+  const popping = () => appear.size > 0 || bumps.size > 0;
+
+  // scale and drop of a hexagon (and so of its nodes and Edges) this frame; null when at rest
+  function popOf(h, now) {
+    if (!h) return null;
+    let s = 1;
+    let drop = 0;
+    const a = appear.get(keyOf(h));
+    if (a !== undefined) {
+      const p = (now - a) / POP.inMs;
+      if (p <= 0) s = 0;
+      else if (p < 1) {
+        s = easeOutBack(p);
+        drop = LIFT * 0.7 * (1 - p) ** 2;
+      } else appear.delete(keyOf(h));
+    }
+    const b = bumpOf(h.id, now);
+    if (b === null) bumps.delete(h.id);
+    else s *= b;
+    return s === 1 && drop === 0 ? null : { s, drop };
+  }
+
+  // a quick boing when a hexagon is picked; null once it is over
+  function bumpOf(id, now) {
+    const b = bumps.get(id);
+    if (b === undefined) return 1;
+    const p = (now - b) / POP.bumpMs;
+    return p < 1 ? 1 + 0.12 * Math.sin(Math.PI * p) : null;
+  }
+
+  // scales a part placed at wall coordinates about its hexagon's centre
+  const scratch = { t: new THREE.Matrix4(), s: new THREE.Matrix4() };
+  function popAbout(h, pop, m) {
+    scratch.t.makeTranslation(-h.x, 0, -h.z);
+    scratch.s.makeScale(pop.s, pop.s, pop.s).multiply(scratch.t);
+    scratch.t.makeTranslation(h.x, -pop.drop, h.z);
+    return m.premultiply(scratch.t.multiply(scratch.s));
+  }
+
+  // diffs the new layout against the last one: new grid positions pop in, lost ones squash away
+  function startPops(hexes) {
+    const now = performance.now();
+    const before = placed;
+    placed = new Map(hexes.map((h) => [keyOf(h), h]));
+    leaving = leaving.filter((l) => now - l.start < POP.outMs);
+    if (reduceMotion.matches) {
+      appear.clear();
+      leaving = [];
+      return;
+    }
+    const fresh = hexes.filter((h) => !before?.has(keyOf(h)));
+    if (fresh.length) {
+      const cx = fresh.reduce((t, h) => t + h.x, 0) / fresh.length;
+      const cz = fresh.reduce((t, h) => t + h.z, 0) / fresh.length;
+      const far = Math.max(...fresh.map((h) => Math.hypot(h.x - cx, h.z - cz)), 1e-9);
+      for (const h of fresh) appear.set(keyOf(h), now + ((Math.hypot(h.x - cx, h.z - cz) / far) * POP.stagger * 1000 || 0));
+    }
+    // a big relayout reads better as one fresh build than as a cloud of departures
+    if (before && fresh.length <= hexes.length / 2) {
+      for (const [key, h] of before) if (!placed.has(key)) leaving.push({ x: h.x, z: h.z, start: now });
+    }
+  }
+
+  function buildLeaving() {
+    leaveMeshes = null;
+    if (!leaving.length) return;
+    leaveMeshes = {
+      body: instanced(hexTpl.body, materials.hexBody, leaving.length),
+      led: hexTpl.led && instanced(hexTpl.led, materials.led, leaving.length, { outline: false }),
+    };
+    leaving.forEach((_, i) => leaveMeshes.body.setColorAt(i, palette.hex));
+  }
+
+  // swell a little, then spin down to nothing
+  function writeLeaving(now) {
+    if (!leaveMeshes) return;
+    const hc = lattice.hexCenter;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const shift = new THREE.Matrix4().makeTranslation(-hc.x, 0, -hc.z);
+    leaving.forEach((l, i) => {
+      const p = Math.min(1, (now - l.start) / POP.outMs);
+      const s = p < 0.25 ? 1 + 0.18 * (p / 0.25) : 1.18 * (1 - ((p - 0.25) / 0.75) ** 2);
+      inPlane(q, 40 * p * p);
+      m.compose(new THREE.Vector3(l.x, -LIFT * 0.4 * Math.sin(Math.PI * p), l.z), q, new THREE.Vector3(s, s, s)).multiply(shift);
+      if (p >= 1) m.makeScale(0, 0, 0);
+      leaveMeshes.body.setMatrixAt(i, m);
+      leaveMeshes.led?.setMatrixAt(i, m);
+    });
+    leaveMeshes.body.instanceMatrix.needsUpdate = true;
+    if (leaveMeshes.led) leaveMeshes.led.instanceMatrix.needsUpdate = true;
+    if (leaving.every((l) => now - l.start >= POP.outMs)) {
+      leaving = [];
+      leaveMeshes.body.visible = false;
+      if (leaveMeshes.led) leaveMeshes.led.visible = false;
+      leaveMeshes = null;
+    }
+  }
+
   // the static instance of a hexagon is hidden while its parts are out as separate meshes
-  function writeHexes() {
+  function writeHexes(now = performance.now()) {
     const { body, led } = hexMeshes;
     if (!body || !lattice) return;
     const hc = lattice.hexCenter;
     const out = new Set(sessions.map((s) => s.h.id));
     const m = new THREE.Matrix4();
     hexList.forEach((h, i) => {
+      const pop = popOf(h, now);
       if (out.has(h.id)) m.makeScale(0, 0, 0);
-      else m.makeTranslation(h.x - hc.x, 0, h.z - hc.z);
+      else {
+        m.makeTranslation(h.x - hc.x, 0, h.z - hc.z);
+        if (pop) popAbout(h, pop, m);
+      }
       body.setMatrixAt(i, m);
       led?.setMatrixAt(i, m);
       body.setColorAt(i, tint(h.id));
@@ -497,19 +618,24 @@ export async function createViewer(container, geo) {
     body.instanceMatrix.needsUpdate = true;
     if (body.instanceColor) body.instanceColor.needsUpdate = true;
     if (led) led.instanceMatrix.needsUpdate = true;
-    writeEdges();
-    writeNodes();
+    writeEdges(now);
+    writeNodes(now);
   }
 
   // Edges belong to their hexagon: they share its selection tint and leave the wall with it
-  function writeEdges() {
+  function writeEdges(now = performance.now()) {
     const { body, led } = edgeMeshes;
     if (!lattice || (!body && !led)) return;
     const out = new Set(sessions.map((s) => s.h.id));
     const m = new THREE.Matrix4();
     edgeList.forEach((e, i) => {
       if (out.has(e.hexId)) m.makeScale(0, 0, 0);
-      else edgeMatrix(e, m);
+      else {
+        edgeMatrix(e, m);
+        const h = hexById.get(e.hexId);
+        const pop = popOf(h, now);
+        if (pop) popAbout(h, pop, m);
+      }
       body?.setMatrixAt(i, m);
       led?.setMatrixAt(i, m);
       body?.setColorAt(i, tint(e.hexId));
@@ -526,8 +652,10 @@ export async function createViewer(container, geo) {
   function animate(now, dt) {
     if (!hexParts) return false;
     const still = reduceMotion.matches;
-    const ease = still ? 1 : 1 - Math.exp(-dt * EASE);
-    let moving = false;
+    let moving = popping();
+    if (moving) writeHexes(now);
+    writeLeaving(now);
+    if (leaveMeshes) moving = true;
     const done = [];
     for (const session of sessions) {
       const leaving = session.leaveAt !== null;
@@ -539,9 +667,18 @@ export async function createViewer(container, geo) {
         const delay = still ? 0 : ring * RING_DELAY;
         if (elapsed >= delay) item.target = leaving ? 0 : 1;
         else settled = false;
-        item.v += (item.target - item.v) * ease;
-        if (Math.abs(item.target - item.v) < 0.001) item.v = item.target;
-        else settled = false;
+        item.vel ??= 0;
+        if (still) {
+          item.v = item.target;
+          item.vel = 0;
+        } else {
+          item.vel += (SPRING.k * (item.target - item.v) - SPRING.damping * item.vel) * dt;
+          item.v += item.vel * dt;
+        }
+        if (Math.abs(item.target - item.v) < 0.001 && Math.abs(item.vel) < 0.01) {
+          item.v = item.target;
+          item.vel = 0;
+        } else settled = false;
       }
       applySession(session, now);
       if (!settled || (!leaving && !still)) moving = true;
@@ -562,9 +699,10 @@ export async function createViewer(container, geo) {
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
     last = now;
     const moving = animate(now, dt);
-    if (mode === '3d') controls.update();
+    if (fly) stepFly(now);
+    else if (mode === '3d') controls.update();
     render();
-    if (moving || mode === '3d') rafId = requestAnimationFrame(frame);
+    if (moving || fly || mode === '3d') rafId = requestAnimationFrame(frame);
     else last = 0;
   }
   const kick = () => {
@@ -582,6 +720,9 @@ export async function createViewer(container, geo) {
     hexParts ??= buildHexParts(lat.hexCenter);
     hexList = hexes;
     const byId = new Map(hexes.map((h) => [h.id, h]));
+    hexById = byId;
+    startPops(hexes);
+    buildLeaving();
     if (!byId.has(hoverId)) hoverId = null;
     edgeList = edges;
     nodeList = nodes;
@@ -636,14 +777,19 @@ export async function createViewer(container, geo) {
   }
 
   // all node kinds share one instanced mesh
-  function writeNodes() {
+  function writeNodes(now = performance.now()) {
     if (!nodeMesh || !lattice) return;
     const m = new THREE.Matrix4();
     const out = new Set(sessions.flatMap((s) => s.nodeItems.map((x) => x.key)));
     nodeList.forEach((n, i) => {
       // hidden kinds, and nodes that are out with a hovered hexagon, collapse to nothing
       if (!shown(nodeLayer(n)) || out.has(nodeKey(n))) m.makeScale(0, 0, 0);
-      else nodeMatrix(n, m);
+      else {
+        nodeMatrix(n, m);
+        const h = hexById.get(n.hexId);
+        const pop = popOf(h, now);
+        if (pop) popAbout(h, pop, m);
+      }
       nodeMesh.setMatrixAt(i, m);
     });
     nodeMesh.instanceMatrix.needsUpdate = true;
@@ -688,10 +834,13 @@ export async function createViewer(container, geo) {
   }
 
   function setSelected(ids) {
+    const now = performance.now();
+    if (!reduceMotion.matches) for (const id of ids) if (!selected.has(id)) bumps.set(id, now);
     selected = new Set(ids);
     writeHexes();
     sessions.forEach(applySession);
     render();
+    if (popping()) kick();
   }
 
   // wall coordinates (URDF x, z) under a screen point, found on the plane of the hexagon frames
@@ -700,7 +849,7 @@ export async function createViewer(container, geo) {
     if (!lattice) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-    raycaster.setFromCamera(ndc, mode === '3d' ? perspective : ortho);
+    raycaster.setFromCamera(ndc, camera());
     // root turns URDF -Y toward the viewer, so the frame plane sits at world z = -hexCenter.y
     wallPlane.constant = lattice.hexCenter.y;
     const hit = raycaster.ray.intersectPlane(wallPlane, new THREE.Vector3());
@@ -727,12 +876,75 @@ export async function createViewer(container, geo) {
   new ResizeObserver(resize).observe(container);
   resize();
 
+  // --- 2D <-> 3D: fly the perspective camera between a front view that matches the flat drawing and the orbit view
+
+  // the perspective view whose picture of the wall plane matches the orthographic frame
+  function frontPose() {
+    if (!lattice || !wallSize) return null;
+    const zWall = -lattice.hexCenter.y;
+    const target = new THREE.Vector3((ortho.left + ortho.right) / 2, (ortho.top + ortho.bottom) / 2, zWall);
+    const dist = (ortho.top - ortho.bottom) / 2 / Math.tan(THREE.MathUtils.degToRad(perspective.fov) / 2);
+    return { pos: target.clone().add(new THREE.Vector3(0, 0, dist)), target };
+  }
+
+  const flyTarget = new THREE.Vector3();
+  function stepFly(now) {
+    const p = Math.min(1, (now - fly.t0) / FLY_MS);
+    const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2;
+    perspective.position.lerpVectors(fly.from.pos, fly.to.pos, e);
+    flyTarget.lerpVectors(fly.from.target, fly.to.target, e);
+    perspective.lookAt(flyTarget);
+    if (p < 1) return;
+    const { done } = fly;
+    fly = null;
+    done();
+  }
+
+  // resolves once the camera has arrived, so the caller can bring the 2D overlay back in step
   function setMode(next) {
+    const was = mode;
+    const live = fly ? { pos: perspective.position.clone(), target: flyTarget.clone() } : null;
+    if (was === '3d' && !fly) orbitPose = { pos: perspective.position.clone(), target: controls.target.clone() };
     mode = next;
-    controls.enabled = next === '3d';
+    controls.enabled = false;
     renderer.domElement.style.cursor = next === '3d' ? 'grab' : '';
     resize();
-    kick();
+    const front = frontPose();
+    const finish = () => {
+      if (mode === '3d' && orbitPose) {
+        perspective.position.copy(orbitPose.pos);
+        controls.target.copy(orbitPose.target);
+        controls.update();
+      }
+      controls.enabled = mode === '3d';
+    };
+    if (next === was && !fly) {
+      finish();
+      kick();
+      return Promise.resolve();
+    }
+    if (reduceMotion.matches || !front || !orbitPose) {
+      fly = null;
+      finish();
+      kick();
+      return Promise.resolve();
+    }
+    const from = live ?? (was === '3d' ? orbitPose : front);
+    const to = next === '3d' ? orbitPose : front;
+    return new Promise((resolve) => {
+      fly?.done();
+      controls.enabled = false;
+      fly = {
+        from: { pos: from.pos.clone(), target: from.target.clone() },
+        to,
+        t0: performance.now(),
+        done: () => {
+          finish();
+          resolve();
+        },
+      };
+      kick();
+    });
   }
 
   // re-reads the CSS colours after the page switches theme

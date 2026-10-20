@@ -307,13 +307,18 @@ function setView(next) {
   view = next;
   btn2d.setAttribute('aria-pressed', String(next === '2d'));
   btn3d.setAttribute('aria-pressed', String(next === '3d'));
-  svg.toggleAttribute('hidden', next !== '2d');
   tip.hidden = true;
-  if (viewer) {
-    hint.textContent = HINTS[next];
-    hover(null);
-    viewer.setMode(next);
+  if (!viewer) {
+    svg.toggleAttribute('hidden', next !== '2d');
+    return;
   }
+  // the overlay leaves as the camera starts to fly and comes back once it has landed on the front view
+  if (next === '3d') svg.toggleAttribute('hidden', true);
+  hint.textContent = HINTS[next];
+  hover(null);
+  viewer.setMode(next).then(() => {
+    if (view === '2d') svg.toggleAttribute('hidden', false);
+  });
 }
 
 function applyLayers() {

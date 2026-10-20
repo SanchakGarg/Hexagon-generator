@@ -780,6 +780,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .viewport { flex: none; width: 100%; aspect-ratio: 1; max-height: 70vh; }
   .side { overflow: visible; padding: 4px 2px 12px; }
   .hex-card { left: 24px; min-width: 0; max-width: calc(100% - 40px); }
+  .hint { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
