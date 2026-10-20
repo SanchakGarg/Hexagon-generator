@@ -1,6 +1,7 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize } from './layout.js';
 import { renderWall } from './render.js';
+import { initTheme, initSections } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
@@ -73,6 +74,7 @@ function resetZoom() {
 function chip(h, label, onRemove) {
   const li = document.createElement('li');
   li.className = 'chip';
+  li.dataset.key = keyOf(h);
   li.title = `row ${h.row}, col ${h.col}`;
   li.append(h.id);
   const btn = document.createElement('button');
@@ -84,25 +86,29 @@ function chip(h, label, onRemove) {
   return li;
 }
 
+// keeps the chips already on screen, so only new ones pop in
+function syncChips(list, hexes, label, onRemove) {
+  const have = new Map([...list.children].map((li) => [li.dataset.key, li]));
+  list.replaceChildren(
+    ...hexes.map((h) => {
+      const li = have.get(keyOf(h));
+      if (li && li.firstChild.textContent === h.id) return li;
+      return chip(h, label, () => onRemove(h));
+    }),
+  );
+}
+
 function renderLists() {
   const sel = gridHexes.filter((h) => selected.has(keyOf(h)));
   const exc = gridHexes.filter((h) => excluded.has(keyOf(h)));
-  $('selected-list').replaceChildren(
-    ...sel.map((h) =>
-      chip(h, 'Deselect', () => {
-        selected.delete(keyOf(h));
-        update();
-      }),
-    ),
-  );
-  $('excluded-list').replaceChildren(
-    ...exc.map((h) =>
-      chip(h, 'Restore', () => {
-        excluded.delete(keyOf(h));
-        update();
-      }),
-    ),
-  );
+  syncChips($('selected-list'), sel, 'Deselect', (h) => {
+    selected.delete(keyOf(h));
+    update();
+  });
+  syncChips($('excluded-list'), exc, 'Restore', (h) => {
+    excluded.delete(keyOf(h));
+    update();
+  });
   $('selected-count').textContent = sel.length;
   $('excluded-count').textContent = exc.length;
   excludeBtn.disabled = sel.length === 0;
@@ -457,6 +463,9 @@ async function startViewer() {
   if (lastLayout) update();
   setView(location.hash === '#3d' ? '3d' : view);
 }
+
+initSections();
+initTheme(() => viewer?.setTheme?.());
 
 async function start() {
   if (location.protocol === 'file:') {

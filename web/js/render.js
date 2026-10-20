@@ -11,6 +11,28 @@ function hexPoints(cx, cy, radius, rotation) {
   return pts.join(' ');
 }
 
+// A hand-drawn copy of a hexagon outline: every corner nudged a little, the same way each time for the same seed,
+// so a second pass with another seed reads as a double pencil stroke.
+function sketchPoints(cx, cy, radius, seed) {
+  let h = 2166136261;
+  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const rand = () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296 - 0.5;
+  };
+  const wiggle = radius * 0.035;
+  const pts = [];
+  for (let k = 0; k < 6; k++) {
+    const a = rad(30 + 60 * k);
+    pts.push(`${fmt(cx + radius * Math.cos(a) + rand() * wiggle)},${fmt(cy - radius * Math.sin(a) + rand() * wiggle)}`);
+  }
+  return pts.join(' ');
+}
+
+const sketch = (cx, cy, radius, id) =>
+  `<polygon class="sketch" points="${sketchPoints(cx, cy, radius, `${id}a`)}"/><polygon class="sketch" points="${sketchPoints(cx, cy, radius * 0.985, `${id}b`)}"/>`;
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function stripPoints(x1, y1, x2, y2, halfWidth) {
@@ -64,12 +86,15 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   const tick = size * 0.015;
   const dy = ext.maxY + pad * 0.45;
   const dx = ext.minX - pad * 0.45;
+  const a = tick * 0.9; // arrowhead size
   parts.push(`<g class="dim">
     <line x1="0" y1="${fmt(dy)}" x2="${fmt(W)}" y2="${fmt(dy)}"/>
+    <path d="M${fmt(a)},${fmt(dy - a * 0.6)} L0,${fmt(dy)} L${fmt(a)},${fmt(dy + a * 0.6)} M${fmt(W - a)},${fmt(dy - a * 0.6)} L${fmt(W)},${fmt(dy)} L${fmt(W - a)},${fmt(dy + a * 0.6)}"/>
     <line x1="0" y1="${fmt(dy - tick)}" x2="0" y2="${fmt(dy + tick)}"/>
     <line x1="${fmt(W)}" y1="${fmt(dy - tick)}" x2="${fmt(W)}" y2="${fmt(dy + tick)}"/>
     <text x="${fmt(W / 2)}" y="${fmt(dy - tick * 1.4)}" text-anchor="middle" font-size="${fmt(fsDim)}">${esc(formatLength(W))}</text>
     <line x1="${fmt(dx)}" y1="0" x2="${fmt(dx)}" y2="${fmt(H)}"/>
+    <path d="M${fmt(dx - a * 0.6)},${fmt(a)} L${fmt(dx)},0 L${fmt(dx + a * 0.6)},${fmt(a)} M${fmt(dx - a * 0.6)},${fmt(H - a)} L${fmt(dx)},${fmt(H)} L${fmt(dx + a * 0.6)},${fmt(H - a)}"/>
     <line x1="${fmt(dx - tick)}" y1="0" x2="${fmt(dx + tick)}" y2="0"/>
     <line x1="${fmt(dx - tick)}" y1="${fmt(H)}" x2="${fmt(dx + tick)}" y2="${fmt(H)}"/>
     <text x="${fmt(dx - tick * 1.4)}" y="${fmt(H / 2)}" text-anchor="middle" font-size="${fmt(fsDim)}" transform="rotate(-90 ${fmt(dx - tick * 1.4)} ${fmt(H / 2)})">${esc(formatLength(H))}</text>
@@ -81,7 +106,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const h of excluded) {
     const tip = `${h.id} · row ${h.row}, col ${h.col}\nexcluded · click to restore`;
     parts.push(`<g class="hex ghost" data-ghost="${h.id}" data-tip="${esc(tip)}">
-      <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>
+      <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>${sketch(h.x, y(h.z), lat.R, h.id)}
       <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>
     </g>`);
   }
@@ -89,7 +114,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const h of hexes) {
     const tip = `${h.id} · row ${h.row}, col ${h.col}\nclick to ${selected.has(h.id) ? 'deselect' : 'select'}\n${jointsByHex.get(h.id).sort().join('\n')}`;
     parts.push(`<g class="hex${selected.has(h.id) ? ' selected' : ''}" data-hex="${h.id}" data-tip="${esc(tip)}">
-      <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>
+      <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>${sketch(h.x, y(h.z), lat.R, h.id)}
       <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>
     </g>`);
   }
