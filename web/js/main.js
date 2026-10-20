@@ -192,7 +192,7 @@ function hover(id) {
   showHexCard(id);
 }
 
-// what one hexagon brings to the wall: its corner nodes, its Edges and the joints they make
+// what one hexagon brings to the wall: the nodes it owns, its Edges and the joints they make
 function showHexCard(id) {
   const h = id && lastLayout?.hexes.find((x) => x.id === id);
   if (!h) {
@@ -201,12 +201,14 @@ function showHexCard(id) {
   }
   const { nodes, edges } = lastLayout;
   const corners = nodes.filter((n) => n.joints.some((j) => j.hexId === id));
+  const owned = nodes.filter((n) => n.hexId === id);
   const kinds = { '3-way': 0, '2-way': 0, edge: 0 };
-  for (const n of corners) kinds[n.kind]++;
+  for (const n of owned) kinds[n.kind]++;
   const neighbours = new Set(corners.flatMap((n) => n.joints.map((j) => j.hexId)).filter((x) => x !== id));
   const own = edges.filter((e) => e.hexId === id);
   const rows = [
     ['neighbours', neighbours.size],
+    ['nodes', owned.length ? `${owned.length} · ${owned.map((n) => n.id).join(' ')}` : 0],
     ['3-way nodes', kinds['3-way']],
     ['2-way nodes', kinds['2-way']],
     ['edge nodes', kinds.edge],
@@ -230,11 +232,13 @@ function showHexCard(id) {
   hexCard.hidden = false;
 }
 
-// placed hexagon whose outline contains a wall point, so channels and the gaps between them all count; an Edge
-// counts as part of its hexagon
+// placed hexagon whose outline contains a wall point, so channels and the gaps between them all count; a node and
+// an Edge count as part of the hexagon they belong to
 function hexAt(p) {
   if (!p || !lastLayout) return null;
   const { R } = lattice;
+  const node = lastLayout.nodes.find((n) => Math.hypot(p.x - n.x, p.z - n.z) <= lattice.rho);
+  if (node) return node.hexId;
   const half = (R * Math.sqrt(3)) / 2;
   for (const h of lastLayout.hexes) {
     const dx = Math.abs(p.x - h.x);

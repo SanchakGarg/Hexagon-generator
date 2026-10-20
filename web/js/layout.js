@@ -190,11 +190,12 @@ export function buildNodes(hexes, lat) {
   }
 
   // The hexagon with an Edge here turns the node, so edge-1 meets node-1 running along its side; at most one hexagon
-  // per node has one. Otherwise the first in TURN_ORDER does.
+  // per node has one. Otherwise the first in TURN_ORDER does. That hexagon owns the node, however many it joins.
   for (const node of byKey.values()) {
     const rank = (j) => (j.edge ? -1 : TURN_ORDER.indexOf(j.hexFrame));
     const lead = node.joints.reduce((a, b) => (rank(b) < rank(a) ? b : a));
     node.rotation = lat.turnFor[lead.hexFrame];
+    node.hexId = lead.hexId;
     for (const j of node.joints) {
       j.nodeFrame = nearestFrame(lat.nodeAngles, node.rotation, lat.frameOffset[j.hexFrame]);
       delete j.edge;

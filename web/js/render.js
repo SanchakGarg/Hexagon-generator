@@ -104,7 +104,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
 
   for (const n of nodes) {
     const lines = [...n.joints.map((j) => `${j.nodeFrame} ↔ ${j.hexId}.${j.hexFrame}`), ...(edgesByNode.get(n.id) ?? [])].sort();
-    const tip = `${n.id} · ${n.kind} (${n.type} corner)\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
+    const tip = `${n.id} · ${n.kind} (${n.type} corner) · part of ${n.hexId}\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" data-tip="${esc(tip)}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
 
