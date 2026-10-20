@@ -1,5 +1,5 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildBounds, summarize } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize } from './layout.js';
 import { renderWall } from './render.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -136,7 +136,8 @@ function update() {
   const nodes = buildNodes(hexes, lattice);
   const edges = buildEdges(hexes, nodes, lattice);
   const s = summarize(W, H, hexes, nodes, lattice, edges);
-  lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { t, raise } };
+  const outline = buildOutline(hexes, lattice);
+  lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { t, raise }, outline };
   baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
@@ -161,8 +162,10 @@ function update() {
   setStat('stat-edges', s.edges);
   setStat('stat-joints', s.joints);
   setStat('stat-spare', s.spareFrames);
-  const b = buildBounds(W, H, edges, lattice.rho);
-  setStat('stat-board', `${formatLength(b.maxX - b.minX + 2 * t)} × ${formatLength(b.maxZ - b.minZ + 2 * t)}`);
+  // the board follows the outline, grown so the node bodies sit on it
+  const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
+  const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
+  setStat('stat-board', rim.length ? `${formatLength(span('x'))} × ${formatLength(span('z'))}` : '–');
   setStat('stat-coverage', `${(s.coverage * 100).toFixed(1)}%`);
 
   if (gridHexes.length === 0) {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildBounds } from './layout.js';
+import { loopArea, offsetLoop } from './layout.js';
 
 const NODE_COLORS = { '3-way': 0x67c4d8, '2-way': 0xb39ddb, edge: 0xec7c63 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -104,24 +104,46 @@ export async function createViewer(container, geo) {
     return Math.max(maxY(hexTpl.body), maxY(hexTpl.led), maxY(nodeTpl.body, lat.nodeYOffset), maxY(edgeTpl.body, lat.edge.yOffset), maxY(edgeTpl.led, lat.edge.yOffset));
   }
 
-  // white backboard behind the whole build, with sides of the same material raised toward the viewer around it
-  function buildBoard(inner, { t, raise }, backZ) {
-    const box = (x0, x1, y0, y1, z0, z1) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), materials.board);
-      mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  // White backboard cut to the outline of the build, grown by the node-body radius so every node sits on it, with
+  // side walls of the same material running round its edge and going back from it, which raise it off the wall.
+  function buildBoard(outline, { t, raise }, backZ) {
+    const margin = lattice.rho;
+    const path = (loop, p) => {
+      loop.forEach((q, i) => (i ? p.lineTo(q.x, q.z) : p.moveTo(q.x, q.z)));
+      p.closePath();
+      return p;
+    };
+    const inside = ({ x, z }, loop) =>
+      loop.reduce((odd, p, i) => {
+        const q = loop[(i + 1) % loop.length];
+        return (p.z > z) !== (q.z > z) && x < p.x + ((z - p.z) * (q.x - p.x)) / (q.z - p.z) ? !odd : odd;
+      }, false);
+    const slab = (shapes, z0, depth) => {
+      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false }), materials.board);
+      mesh.position.z = z0;
       scene.add(mesh);
       return mesh;
     };
-    const { minX, maxX, minZ: minY, maxZ: maxY } = inner;
-    const meshes = [box(minX - t, maxX + t, minY - t, maxY + t, backZ - t, backZ)];
+
+    // each hole goes in the smallest outer loop around it
+    const outers = outline.filter((l) => loopArea(l) > 0).sort((a, b) => loopArea(a) - loopArea(b));
+    const shapes = new Map(outers.map((l) => [l, path(offsetLoop(l, margin), new THREE.Shape())]));
+    for (const hole of outline.filter((l) => loopArea(l) < 0)) {
+      const owner = outers.find((l) => inside(hole[0], l));
+      if (owner) shapes.get(owner).holes.push(path(offsetLoop(hole, margin), new THREE.Path()));
+    }
+    if (!shapes.size) return [];
+    const meshes = [slab([...shapes.values()], backZ - t, t)];
+
+    // a wall t thick just inside the board's edge, round the outside and round every hole
     if (raise > 0) {
-      const z1 = backZ + raise;
-      meshes.push(
-        box(minX - t, maxX + t, maxY, maxY + t, backZ, z1),
-        box(minX - t, maxX + t, minY - t, minY, backZ, z1),
-        box(minX - t, minX, minY, maxY, backZ, z1),
-        box(maxX, maxX + t, minY, maxY, backZ, z1),
-      );
+      const rings = outline.map((l) => {
+        const [big, small] = [offsetLoop(l, margin), offsetLoop(l, margin - t)].sort((a, b) => Math.abs(loopArea(b)) - Math.abs(loopArea(a)));
+        const ring = path(big, new THREE.Shape());
+        ring.holes.push(path(small, new THREE.Path()));
+        return ring;
+      });
+      meshes.push(slab(rings, backZ - t - raise, raise));
     }
     return meshes;
   }
@@ -460,14 +482,13 @@ export async function createViewer(container, geo) {
     if (!rafId) rafId = requestAnimationFrame(frame);
   };
 
-  function update({ W, H, hexes, nodes, edges, lat, board }) {
+  function update({ W, H, hexes, nodes, edges, lat, board, outline }) {
     clear();
     wallSize = { W, H };
     lattice = lat;
 
     // root turns URDF Y into world -Z
-    const inner = buildBounds(W, H, edges, lat.rho);
-    wallObjects = buildBoard(inner, board, -backOf(lat));
+    wallObjects = buildBoard(outline, board, -backOf(lat));
 
     const color = new THREE.Color();
 
@@ -503,9 +524,14 @@ export async function createViewer(container, geo) {
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
     writeNodes();
 
-    // frame the board, which wraps the wall and any Edges that overhang it
-    const { t } = board;
-    const bounds = { minX: inner.minX - t, maxX: inner.maxX + t, minZ: inner.minZ - t, maxZ: inner.maxZ + t };
+    // frame the wall and the board
+    const bounds = { minX: 0, maxX: W, minZ: 0, maxZ: H };
+    for (const p of outline.flatMap((l) => offsetLoop(l, lat.rho))) {
+      bounds.minX = Math.min(bounds.minX, p.x);
+      bounds.maxX = Math.max(bounds.maxX, p.x);
+      bounds.minZ = Math.min(bounds.minZ, p.z);
+      bounds.maxZ = Math.max(bounds.maxZ, p.z);
+    }
     const size = [...Object.values(bounds), board.raise].map((v) => v.toFixed(4)).join(',');
     if (size !== fittedSize) {
       fittedSize = size;

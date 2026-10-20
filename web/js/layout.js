@@ -280,14 +280,55 @@ export function summarize(W, H, hexes, nodes, lat, edges = []) {
   };
 }
 
-// what the build covers: the wall plus any Edges that overhang it, out to the Edge's half-width past each tip
-export function buildBounds(W, H, edges, pad = 0) {
-  const b = { minX: 0, maxX: W, minZ: 0, maxZ: H };
-  for (const e of edges) {
-    b.minX = Math.min(b.minX, e.tipX - pad);
-    b.maxX = Math.max(b.maxX, e.tipX + pad);
-    b.minZ = Math.min(b.minZ, e.tipZ - pad);
-    b.maxZ = Math.max(b.maxZ, e.tipZ + pad);
+// Outline of the hexagons as closed loops of corners, each run with the hexagons on its left: the outer boundary
+// goes counter-clockwise and the edge of any hole left by excluded hexagons clockwise.
+export function buildOutline(hexes, lat) {
+  const { R, pitch } = lat;
+  const keyOf = (x, z) => `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
+  const hexAt = new Set(hexes.map((h) => keyOf(h.x, h.z)));
+  const corner = (h, a) => ({ x: h.x + R * Math.cos(rad(a)), z: h.z + R * Math.sin(rad(a)) });
+  const next = new Map();
+  for (const h of hexes) {
+    for (let side = 0; side < 360; side += 60) {
+      if (hexAt.has(keyOf(h.x + pitch * Math.cos(rad(side)), h.z + pitch * Math.sin(rad(side))))) continue;
+      const from = corner(h, side - 30);
+      next.set(keyOf(from.x, from.z), { from, to: corner(h, side + 30) });
+    }
   }
-  return b;
+  // three hexagons meet at every corner, so no corner is on the outline twice
+  const loops = [];
+  while (next.size) {
+    let [key, seg] = next.entries().next().value;
+    const loop = [];
+    while (seg) {
+      next.delete(key);
+      loop.push(seg.from);
+      key = keyOf(seg.to.x, seg.to.z);
+      seg = next.get(key);
+    }
+    loops.push(loop);
+  }
+  return loops;
+}
+
+// positive for a counter-clockwise loop
+export function loopArea(loop) {
+  return loop.reduce((s, p, i) => {
+    const q = loop[(i + 1) % loop.length];
+    return s + (p.x * q.z - q.x * p.z) / 2;
+  }, 0);
+}
+
+// Moves every side of an outline loop d away from the hexagons (toward them when d is negative), mitring the corners.
+export function offsetLoop(loop, d) {
+  const normal = (a, b) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    return { x: (b.z - a.z) / len, z: -(b.x - a.x) / len };
+  };
+  return loop.map((p, i) => {
+    const n1 = normal(loop[(i + loop.length - 1) % loop.length], p);
+    const n2 = normal(p, loop[(i + 1) % loop.length]);
+    const k = d / (1 + n1.x * n2.x + n1.z * n2.z);
+    return { x: p.x + (n1.x + n2.x) * k, z: p.z + (n1.z + n2.z) * k };
+  });
 }
