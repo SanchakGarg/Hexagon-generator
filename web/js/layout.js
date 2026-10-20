@@ -8,10 +8,15 @@ const ANCHORS = {
 const UP_CORNERS = new Set([30, 150, 270]);
 // A hexagon panel builds three of its six sides itself (right, upper-left, lower-left: side normals 0°, 120°, 240°);
 // the neighbour across each of the other three builds that one. Where that neighbour is missing, an Edge completes
-// the side, mating edge-1 to the node at its upper-pointing end (the 30°, 150° or 270° corner) on the node frame that
-// runs along the side. Nodes keep their standard turn, so the hexagon joints are untouched.
+// the side, mating the node at each end on the node frame that runs along the side. Nodes keep their standard turn,
+// so the hexagon joints are untouched.
 const EDGE_FRAME = 'edge-1';
 const BORROWED_SIDES = [60, 180, 300];
+// An Edge mates a node at each end on one of these frames; edge-1 goes to the node-1 end when the side has one.
+const EDGE_NODE_FRAMES = ['node-1', 'node-3', 'node-5'];
+// Every node belongs to exactly one hexagon, however many it joins: the first of these corners it fills. In a full
+// wall each hexagon owns the two nodes of its right side; along the border the next corner in line takes over.
+const OWNER_CORNERS = [30, 330, 150, 210, 270, 90];
 
 const rad = (d) => (d * Math.PI) / 180;
 const norm = (d) => ((d % 360) + 360) % 360;
@@ -190,16 +195,18 @@ export function buildNodes(hexes, lat) {
   nodes.forEach((n, i) => {
     n.id = `N${i + 1}`;
     n.kind = n.joints.length === 3 ? '3-way' : n.joints.length === 2 ? '2-way' : 'edge';
+    const rank = (j) => OWNER_CORNERS.indexOf(lat.cornerOf[j.hexFrame]);
+    n.hexId = n.joints.reduce((a, b) => (rank(b) < rank(a) ? b : a)).hexId;
     const used = new Set(n.joints.map((j) => j.nodeFrame));
     n.spare = allNodeFrames.filter((f) => !used.has(f));
   });
   return nodes;
 }
 
-const nearestFrame = (angles, rotation, target) => {
+const nearestFrame = (angles, rotation, target, names = Object.keys(angles)) => {
   let best = null;
-  for (const [name, a] of Object.entries(angles)) {
-    const d = angleDiff(a + rotation, target);
+  for (const name of names) {
+    const d = angleDiff(angles[name] + rotation, target);
     if (!best || d < best.d) best = { name, d };
   }
   return best.name;
@@ -217,29 +224,38 @@ export function buildEdges(hexes, nodes, lat) {
   for (const h of hexes) {
     for (const side of BORROWED_SIDES) {
       if (hexAt.has(keyOf(h.x + pitch * Math.cos(rad(side)), h.z + pitch * Math.sin(rad(side))))) continue;
-      const from = corner(h, side - 30);
-      const to = corner(h, side + 30);
-      const n = nodeAt.get(keyOf(from.x, from.z));
-      if (!n) continue;
-      const angle = norm(deg(Math.atan2(to.z - from.z, to.x - from.x)));
+      const ends = [corner(h, side - 30), corner(h, side + 30)].map((p) => nodeAt.get(keyOf(p.x, p.z)));
+      if (ends.some((n) => !n)) continue;
+      // each end mates on the frame that runs along the side toward the other end
+      const along = (n, other) => norm(deg(Math.atan2(other.z - n.z, other.x - n.x)));
+      let [near, far] = ends.map((n, i) => {
+        const other = ends[1 - i];
+        return { n, frame: nearestFrame(lat.nodeAngles, n.rotation, along(n, other), EDGE_NODE_FRAMES) };
+      });
+      if (far.frame === 'node-1' && near.frame !== 'node-1') [near, far] = [far, near];
+      const angle = along(near.n, far.n);
       const ux = Math.cos(rad(angle));
       const uz = Math.sin(rad(angle));
       const edge = {
         id: `E${edges.length + 1}`,
         hexId: h.id,
-        nodeId: n.id,
+        nodeId: near.n.id,
         edgeFrame: EDGE_FRAME,
-        nodeFrame: nearestFrame(lat.nodeAngles, n.rotation, angle),
-        x: n.x + r * ux,
-        z: n.z + r * uz,
+        nodeFrame: near.frame,
+        farNodeId: far.n.id,
+        farNodeFrame: far.frame,
+        x: near.n.x + r * ux,
+        z: near.n.z + r * uz,
         angle,
         rotation: norm(angle - lat.edge.axisAngle),
-        tipX: n.x + (r + lat.edge.length) * ux,
-        tipZ: n.z + (r + lat.edge.length) * uz,
+        tipX: near.n.x + (r + lat.edge.length) * ux,
+        tipZ: near.n.z + (r + lat.edge.length) * uz,
       };
       edges.push(edge);
-      n.edges = [...(n.edges ?? []), edge.id];
-      n.spare = n.spare.filter((f) => f !== edge.nodeFrame);
+      for (const { n, frame } of [near, far]) {
+        n.edges = [...(n.edges ?? []), edge.id];
+        n.spare = n.spare.filter((f) => f !== frame);
+      }
     }
   }
   return edges;
@@ -265,7 +281,8 @@ export function summarize(W, H, hexes, nodes, lat, edges = []) {
     twoWay: nodes.filter((n) => n.kind === '2-way').length,
     edge: nodes.filter((n) => n.kind === 'edge').length,
     edges: edges.length,
-    joints: nodes.reduce((s, n) => s + n.joints.length, 0) + edges.length,
+    // an Edge mates a node at each end
+    joints: nodes.reduce((s, n) => s + n.joints.length, 0) + 2 * edges.length,
     spareFrames: nodes.reduce((s, n) => s + n.spare.length, 0),
     coverage: (hexes.length * hexArea) / (W * H),
     groups: countGroups(hexes, nodes),
