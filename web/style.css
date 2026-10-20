@@ -393,6 +393,9 @@ h2 {
   vector-effect: non-scaling-stroke;
 }
 
+/* over the meshes the wall outline sits on the white backboard */
+svg:not(.flat) .wall { fill: none; stroke: var(--muted); }
+
 .dim line {
   stroke: var(--muted);
   stroke-width: 1;

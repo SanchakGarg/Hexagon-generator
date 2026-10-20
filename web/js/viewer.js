@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildBounds } from './layout.js';
 
 const NODE_COLORS = { '3-way': 0x67c4d8, '2-way': 0xb39ddb, edge: 0xec7c63 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -70,8 +71,8 @@ export async function createViewer(container, geo) {
     edgeBody: new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.35, roughness: 0.5 }),
     led: new THREE.MeshStandardMaterial({ color: 0xfff1d0, emissive: 0xf0b84f, emissiveIntensity: 0.9, roughness: 0.4 }),
     nodeBody: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.45 }),
-    wall: new THREE.MeshStandardMaterial({ color: 0x1d2229, roughness: 1 }),
-    wallEdge: new THREE.LineBasicMaterial({ color: 0xe7e2d4, transparent: true, opacity: 0.5 }),
+    // the backboard and its raised sides are one material
+    board: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0 }),
   };
 
   // URDF is Z-up with Y through the panel; turn it so URDF Z is screen-up and the top plates face the camera.
@@ -91,6 +92,38 @@ export async function createViewer(container, geo) {
       else obj.geometry?.dispose();
     }
     wallObjects = [];
+  }
+
+  // deepest URDF Y any part reaches, i.e. the back of the build, which sits on the board
+  function backOf(lat) {
+    const maxY = (geometry, offset = 0) => {
+      if (!geometry) return -Infinity;
+      geometry.computeBoundingBox();
+      return geometry.boundingBox.max.y + offset;
+    };
+    return Math.max(maxY(hexTpl.body), maxY(hexTpl.led), maxY(nodeTpl.body, lat.nodeYOffset), maxY(edgeTpl.body, lat.edge.yOffset), maxY(edgeTpl.led, lat.edge.yOffset));
+  }
+
+  // white backboard behind the whole build, with sides of the same material raised toward the viewer around it
+  function buildBoard(inner, { t, raise }, backZ) {
+    const box = (x0, x1, y0, y1, z0, z1) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), materials.board);
+      mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      scene.add(mesh);
+      return mesh;
+    };
+    const { minX, maxX, minZ: minY, maxZ: maxY } = inner;
+    const meshes = [box(minX - t, maxX + t, minY - t, maxY + t, backZ - t, backZ)];
+    if (raise > 0) {
+      const z1 = backZ + raise;
+      meshes.push(
+        box(minX - t, maxX + t, maxY, maxY + t, backZ, z1),
+        box(minX - t, maxX + t, minY - t, minY, backZ, z1),
+        box(minX - t, minX, minY, maxY, backZ, z1),
+        box(maxX, maxX + t, minY, maxY, backZ, z1),
+      );
+    }
+    return meshes;
   }
 
   function instanced(geometry, material, count) {
@@ -427,17 +460,14 @@ export async function createViewer(container, geo) {
     if (!rafId) rafId = requestAnimationFrame(frame);
   };
 
-  function update({ W, H, hexes, nodes, edges, lat }) {
+  function update({ W, H, hexes, nodes, edges, lat, board }) {
     clear();
     wallSize = { W, H };
     lattice = lat;
 
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(W, H), materials.wall);
-    wall.position.set(W / 2, H / 2, -0.03);
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(wall.geometry), materials.wallEdge);
-    outline.position.copy(wall.position);
-    scene.add(wall, outline);
-    wallObjects = [wall, outline];
+    // root turns URDF Y into world -Z
+    const inner = buildBounds(W, H, edges, lat.rho);
+    wallObjects = buildBoard(inner, board, -backOf(lat));
 
     const color = new THREE.Color();
 
@@ -473,15 +503,10 @@ export async function createViewer(container, geo) {
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
     writeNodes();
 
-    // frame the wall plus any Edges that overhang it
-    const bounds = { minX: 0, maxX: W, minZ: 0, maxZ: H };
-    for (const e of edges) {
-      bounds.minX = Math.min(bounds.minX, e.tipX);
-      bounds.maxX = Math.max(bounds.maxX, e.tipX);
-      bounds.minZ = Math.min(bounds.minZ, e.tipZ);
-      bounds.maxZ = Math.max(bounds.maxZ, e.tipZ);
-    }
-    const size = Object.values(bounds).map((v) => v.toFixed(4)).join(',');
+    // frame the board, which wraps the wall and any Edges that overhang it
+    const { t } = board;
+    const bounds = { minX: inner.minX - t, maxX: inner.maxX + t, minZ: inner.minZ - t, maxZ: inner.maxZ + t };
+    const size = [...Object.values(bounds), board.raise].map((v) => v.toFixed(4)).join(',');
     if (size !== fittedSize) {
       fittedSize = size;
       fitPerspective(bounds);

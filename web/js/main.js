@@ -1,5 +1,5 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, summarize } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildBounds, summarize } from './layout.js';
 import { renderWall } from './render.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -14,6 +14,8 @@ const CLICK_SLOP = 4; // px a pointer may move and still count as a click
 const $ = (id) => document.getElementById(id);
 const widthIn = $('wall-width');
 const heightIn = $('wall-height');
+const thicknessIn = $('board-thickness');
+const raiseIn = $('board-raise');
 const unitButtons = [...document.querySelectorAll('#units [data-unit]')];
 const viewport = $('viewport');
 const svg = $('stage-svg');
@@ -117,6 +119,12 @@ function update() {
     note.textContent = 'Enter a width and height greater than zero.';
     return;
   }
+  const t = parseFloat(thicknessIn.value) * scale;
+  const raise = parseFloat(raiseIn.value) * scale;
+  if (!(t > 0 && raise >= 0)) {
+    note.textContent = 'Enter a board thickness above zero and a raise of zero or more.';
+    return;
+  }
 
   // re-centre on what is left, so excluding hexagons doesn't leave the assembly off to one side
   gridHexes = centerKept(fitWall(W, H, lattice), (h) => !excluded.has(keyOf(h)), W, H);
@@ -128,7 +136,7 @@ function update() {
   const nodes = buildNodes(hexes, lattice);
   const edges = buildEdges(hexes, nodes, lattice);
   const s = summarize(W, H, hexes, nodes, lattice, edges);
-  lastLayout = { W, H, hexes, nodes, edges, lat: lattice };
+  lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { t, raise } };
   baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
@@ -153,6 +161,8 @@ function update() {
   setStat('stat-edges', s.edges);
   setStat('stat-joints', s.joints);
   setStat('stat-spare', s.spareFrames);
+  const b = buildBounds(W, H, edges, lattice.rho);
+  setStat('stat-board', `${formatLength(b.maxX - b.minX + 2 * t)} × ${formatLength(b.maxZ - b.minZ + 2 * t)}`);
   setStat('stat-coverage', `${(s.coverage * 100).toFixed(1)}%`);
 
   if (gridHexes.length === 0) {
@@ -169,7 +179,7 @@ function update() {
 function setUnit(next) {
   if (next === unit) return;
   const factor = UNITS[unit] / UNITS[next];
-  for (const input of [widthIn, heightIn]) {
+  for (const input of [widthIn, heightIn, thicknessIn, raiseIn]) {
     const v = parseFloat(input.value);
     if (v > 0) input.value = +(v * factor).toFixed(DECIMALS[next]);
   }
@@ -466,6 +476,8 @@ async function start() {
 
   widthIn.addEventListener('input', update);
   heightIn.addEventListener('input', update);
+  thicknessIn.addEventListener('input', update);
+  raiseIn.addEventListener('input', update);
   svg.classList.add('flat');
   update();
   startViewer();

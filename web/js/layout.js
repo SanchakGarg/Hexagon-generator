@@ -279,3 +279,15 @@ export function summarize(W, H, hexes, nodes, lat, edges = []) {
     groups: countGroups(hexes, nodes),
   };
 }
+
+// what the build covers: the wall plus any Edges that overhang it, out to the Edge's half-width past each tip
+export function buildBounds(W, H, edges, pad = 0) {
+  const b = { minX: 0, maxX: W, minZ: 0, maxZ: H };
+  for (const e of edges) {
+    b.minX = Math.min(b.minX, e.tipX - pad);
+    b.maxX = Math.max(b.maxX, e.tipX + pad);
+    b.minZ = Math.min(b.minZ, e.tipZ - pad);
+    b.maxZ = Math.max(b.maxZ, e.tipZ + pad);
+  }
+  return b;
+}
