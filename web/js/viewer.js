@@ -273,14 +273,23 @@ export async function createViewer(container, geo) {
     }
   }
 
-  // The nodes it owns come out with it too, just after its outer channels and before its Edges. Every node belongs
-  // to one hexagon only, even a 2-way or 3-way one that joins others, so hovering a neighbour leaves it in place.
+  // Its corner nodes come out with it too, just after its outer channels and before its Edges. A 2-way or 3-way
+  // node is shared, so it goes with the hexagon that claimed it last, keeping how far it is already out. Nodes sit
+  // straight under hoverRoot, so a claim moves only the item between sessions.
   function attachNodes(session) {
     const { h } = session;
-    const wanted = new Map(nodeList.filter((n) => n.hexId === h.id).map((n) => [nodeKey(n), n]));
+    const wanted = new Map(nodeList.filter((n) => n.joints.some((j) => j.hexId === h.id)).map((n) => [nodeKey(n), n]));
     for (const item of session.nodeItems.filter((x) => !wanted.has(x.key))) disposeItem(item);
     session.nodeItems = session.nodeItems.filter((x) => wanted.has(x.key));
     for (const [key, n] of wanted) {
+      for (const other of sessions) {
+        if (other === session) continue;
+        const taken = other.nodeItems.filter((x) => x.key === key);
+        if (!taken.length) continue;
+        other.nodeItems = other.nodeItems.filter((x) => x.key !== key);
+        other.items = other.items.filter((x) => !taken.includes(x));
+        session.nodeItems.push(...taken);
+      }
       const own = session.nodeItems.filter((x) => x.key === key);
       if (own.length) {
         for (const item of own) {

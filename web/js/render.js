@@ -97,15 +97,14 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   const edgesByNode = new Map();
   for (const e of edges) {
     const half = Math.max(0.012, size * 0.005);
-    const tip = `${e.id} · Edge of ${e.hexId}\n${e.edgeFrame} ↔ ${e.nodeId}.${e.nodeFrame}\nfar end ↔ ${e.farNodeId}.${e.farNodeFrame}\nlength ${formatLength(lat.edge.length)}`;
+    const tip = `${e.id} · Edge of ${e.hexId}\n${e.edgeFrame} ↔ ${e.nodeId}.${e.nodeFrame}\nlength ${formatLength(lat.edge.length)}`;
     parts.push(`<polygon class="edge" data-tip="${esc(tip)}" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
     edgesByNode.set(e.nodeId, [...(edgesByNode.get(e.nodeId) ?? []), `${e.nodeFrame} ↔ ${e.id}.${e.edgeFrame}`]);
-    edgesByNode.set(e.farNodeId, [...(edgesByNode.get(e.farNodeId) ?? []), `${e.farNodeFrame} ↔ ${e.id} far end`]);
   }
 
   for (const n of nodes) {
     const lines = [...n.joints.map((j) => `${j.nodeFrame} ↔ ${j.hexId}.${j.hexFrame}`), ...(edgesByNode.get(n.id) ?? [])].sort();
-    const tip = `${n.id} · ${n.kind} (${n.type} corner) · part of ${n.hexId}\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
+    const tip = `${n.id} · ${n.kind} (${n.type} corner)\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" data-tip="${esc(tip)}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
 
