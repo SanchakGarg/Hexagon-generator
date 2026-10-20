@@ -20,12 +20,12 @@
 
   /* part colours, shared by the drawing, the keys and the 3D view */
   --c-hex: #a9dcc6;
-  --c-led: #ffd36e;
+  --c-led: #ffd77a;
   --c-3way: #93cdee;
   --c-2way: #bba8ef;
   --c-edge: #f8ae8e;
   --c-select: #f597b0;
-  --c-board: #fffaf1;
+  --c-board: #fcebd2;
   --c-outline: #3b3a4a;
   --hl: 80%; /* highlighter strength */
 

@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loopArea, offsetLoop } from './layout.js';
 
-const NODE_COLORS = { '3-way': 0x67c4d8, '2-way': 0xb39ddb, edge: 0xec7c63 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const ONE = new THREE.Vector3(1, 1, 1);
 
@@ -34,6 +33,77 @@ async function buildTemplate(visuals) {
   };
 }
 
+// Part colours come from the page's CSS variables, so the drawing follows the light or dark theme.
+function readPalette() {
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => new THREE.Color(css.getPropertyValue(name).trim() || '#ff00ff');
+  return {
+    hex: color('--c-hex'),
+    led: color('--c-led'),
+    select: color('--c-select'),
+    board: color('--c-board'),
+    outline: color('--c-outline'),
+    node: { '3-way': color('--c-3way'), '2-way': color('--c-2way'), edge: color('--c-edge') },
+  };
+}
+
+// Three flat bands of light (shade, side, lit) instead of smooth shading: the cel look.
+function toonRamp() {
+  const texture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, 140, 140, 140, 255, 255, 255, 255, 255]), 3, 1);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Ink outline by the inverted hull: back faces drawn again, pushed out along the normal by a fixed number of
+// pixels so the line stays the same weight at any zoom. Works on instanced and plain meshes alike.
+function outlineMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color() }, width: { value: 1.5 }, resolution: { value: new THREE.Vector2(1, 1) } },
+    side: THREE.BackSide,
+    vertexShader: /* glsl */ `
+      uniform float width;
+      uniform vec2 resolution;
+      void main() {
+        vec4 p = vec4(position, 1.0);
+        vec3 n = normal;
+        #ifdef USE_INSTANCING
+          p = instanceMatrix * p;
+          n = mat3(instanceMatrix) * n;
+        #endif
+        vec4 clip = projectionMatrix * modelViewMatrix * p;
+        vec2 dir = (projectionMatrix * vec4(mat3(modelViewMatrix) * n, 0.0)).xy * resolution;
+        float len = length(dir);
+        if (len > 1e-6) clip.xy += dir / len * width * 2.0 / resolution * clip.w;
+        gl_Position = clip;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 color;
+      void main() {
+        gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+// The hull needs one normal per corner, averaged over the faces that meet there, or it splits open at every edge
+// of a flat-shaded STL.
+const smoothCache = new WeakMap();
+function smoothed(geometry) {
+  let g = smoothCache.get(geometry);
+  if (!g) {
+    const bare = new THREE.BufferGeometry();
+    bare.setAttribute('position', geometry.getAttribute('position'));
+    if (geometry.index) bare.setIndex(geometry.index);
+    g = mergeVertices(bare, 1e-5);
+    g.computeVertexNormals();
+    smoothCache.set(geometry, g);
+  }
+  return g;
+}
+
 // In-plane angles grow from +X toward +Z, which is a negative turn about +Y.
 const inPlane = (q, degrees) => q.setFromAxisAngle(Y_AXIS, -THREE.MathUtils.degToRad(degrees));
 
@@ -51,13 +121,11 @@ export async function createViewer(container, geo) {
   container.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xe2e8f2, 0x1a1d22, 1.4));
-  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  // ambient sets the darkest band, the key light adds the rest (Lambert divides both by pi)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62 * Math.PI));
+  const key = new THREE.DirectionalLight(0xffffff, 0.42 * Math.PI);
   key.position.set(3, 5, 8);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0xbcd4ff, 0.7);
-  rim.position.set(-5, -3, 4);
-  scene.add(rim);
 
   const perspective = new THREE.PerspectiveCamera(35, 1, 0.01, 1000);
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
@@ -65,14 +133,25 @@ export async function createViewer(container, geo) {
   controls.enableDamping = true;
   controls.enabled = false;
 
-  const bodyColor = new THREE.Color().setRGB(hexTpl.rgba[0], hexTpl.rgba[1], hexTpl.rgba[2], THREE.SRGBColorSpace);
+  // bodies are white and take their colour per instance, so a selected hexagon is a colour, not a tint
+  let palette = readPalette();
+  const gradientMap = toonRamp();
+  const toon = (params) => new THREE.MeshToonMaterial({ gradientMap, ...params });
   const materials = {
-    hexBody: new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.35, roughness: 0.5 }),
-    edgeBody: new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.35, roughness: 0.5 }),
-    led: new THREE.MeshStandardMaterial({ color: 0xfff1d0, emissive: 0xf0b84f, emissiveIntensity: 0.9, roughness: 0.4 }),
-    nodeBody: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.45 }),
+    hexBody: toon({ color: 0xffffff }),
+    edgeBody: toon({ color: 0xffffff }),
+    led: toon({ color: palette.led, emissive: palette.led, emissiveIntensity: 0.25 }),
+    nodeBody: toon({ color: 0xffffff }),
     // the backboard and its raised sides are one material
-    board: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0 }),
+    board: toon({ color: palette.board }),
+  };
+  const ink = outlineMaterial();
+  ink.uniforms.color.value.copy(palette.outline);
+  const outlined = (mesh) => {
+    const hull = new THREE.Mesh(smoothed(mesh.geometry), ink);
+    hull.raycast = () => {};
+    mesh.add(hull);
+    return mesh;
   };
 
   // URDF is Z-up with Y through the panel; turn it so URDF Z is screen-up and the top plates face the camera.
@@ -88,8 +167,9 @@ export async function createViewer(container, geo) {
   function clear() {
     for (const obj of [...root.children, ...wallObjects]) {
       obj.parent.remove(obj);
-      if (obj.isInstancedMesh) obj.dispose();
-      else obj.geometry?.dispose();
+      // instanced hulls share their parent's template geometry; the board's own geometry goes with it
+      obj.traverse((o) => o.isInstancedMesh && o.dispose());
+      if (!obj.isInstancedMesh) obj.geometry?.dispose();
     }
     wallObjects = [];
   }
@@ -119,7 +199,7 @@ export async function createViewer(container, geo) {
         return (p.z > z) !== (q.z > z) && x < p.x + ((z - p.z) * (q.x - p.x)) / (q.z - p.z) ? !odd : odd;
       }, false);
     const slab = (shapes, z0, depth) => {
-      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false }), materials.board);
+      const mesh = outlined(new THREE.Mesh(new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false }), materials.board));
       mesh.position.z = z0;
       scene.add(mesh);
       return mesh;
@@ -148,9 +228,18 @@ export async function createViewer(container, geo) {
     return meshes;
   }
 
-  function instanced(geometry, material, count) {
+  // the hull reads its parent's instance matrices, so hover and pop animations carry the ink line along
+  function instanced(geometry, material, count, { outline = true } = {}) {
     const mesh = new THREE.InstancedMesh(geometry, material, Math.max(count, 1));
     mesh.count = count;
+    if (outline) {
+      const hull = new THREE.InstancedMesh(smoothed(geometry), ink, Math.max(count, 1));
+      hull.instanceMatrix = mesh.instanceMatrix;
+      hull.count = count;
+      hull.frustumCulled = false;
+      hull.raycast = () => {};
+      mesh.add(hull);
+    }
     root.add(mesh);
     return mesh;
   }
@@ -201,8 +290,6 @@ export async function createViewer(container, geo) {
   const EASE = 10; // per-second easing rate of each part
   // while hovered the raised parts keep a gentle wave running outward through the rings, never dropping to the wall
   const RIPPLE = { depth: 0.3, period: 1.4 }; // fraction of the raise, seconds per cycle
-  const WHITE = new THREE.Color(0xffffff);
-  const SELECTED = new THREE.Color(0xffc46b);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const raycaster = new THREE.Raycaster();
 
@@ -267,6 +354,7 @@ export async function createViewer(container, geo) {
     const body = { edges: materials.edgeBody, hex: materials.hexBody }[part.layer] ?? materials.nodeBody;
     const material = (part.led ? materials.led : body).clone();
     const mesh = new THREE.Mesh(part.geometry, material);
+    if (!part.led) outlined(mesh);
     mesh.userData.hexId = hexId;
     mesh.visible = partShown(part);
     parent.add(mesh);
@@ -341,7 +429,8 @@ export async function createViewer(container, geo) {
         for (const item of own) {
           item.holder.matrix.copy(nodeMatrix(n));
           item.part = { ...item.part, layer: nodeLayer(n) };
-          item.base.setHex(NODE_COLORS[n.kind]);
+          item.kind = n.kind;
+          item.base.copy(palette.node[n.kind]);
           item.mesh.visible = partShown(item.part);
         }
         continue;
@@ -352,7 +441,7 @@ export async function createViewer(container, geo) {
       hoverRoot.add(holder);
       for (const p of nodeParts) {
         const part = { ...p, layer: nodeLayer(n) };
-        session.nodeItems.push({ key, holder, mesh: partMesh(part, holder, h.id), part, base: new THREE.Color(NODE_COLORS[n.kind]), v: 0, target: 0 });
+        session.nodeItems.push({ key, holder, mesh: partMesh(part, holder, h.id), part, base: palette.node[n.kind].clone(), kind: n.kind, v: 0, target: 0 });
       }
     }
     for (const item of session.nodeItems) item.ring = hexParts.rings;
@@ -371,10 +460,10 @@ export async function createViewer(container, geo) {
     for (const { mesh } of session.items) mesh.material.dispose();
   }
 
-  const tint = (id) => (selected.has(id) ? SELECTED : WHITE);
+  const tint = (id) => (selected.has(id) ? palette.select : palette.hex);
 
   function applySession(session, now = performance.now()) {
-    const bodyBase = materials.hexBody.color.clone().multiply(tint(session.h.id));
+    const bodyBase = tint(session.h.id);
     const still = reduceMotion.matches;
     for (const item of session.items) {
       const { mesh, part, ring, v: raise } = item;
@@ -490,8 +579,6 @@ export async function createViewer(container, geo) {
     // root turns URDF Y into world -Z
     wallObjects = buildBoard(outline, board, -backOf(lat));
 
-    const color = new THREE.Color();
-
     hexParts ??= buildHexParts(lat.hexCenter);
     hexList = hexes;
     const byId = new Map(hexes.map((h) => [h.id, h]));
@@ -511,17 +598,16 @@ export async function createViewer(container, geo) {
     }
     hexMeshes = {
       body: instanced(hexTpl.body, materials.hexBody, hexes.length),
-      led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length),
+      led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length, { outline: false }),
     };
     edgeMeshes = {
       body: edgeTpl.body && instanced(edgeTpl.body, materials.edgeBody, edges.length),
-      led: edgeTpl.led && instanced(edgeTpl.led, materials.led, edges.length),
+      led: edgeTpl.led && instanced(edgeTpl.led, materials.led, edges.length, { outline: false }),
     };
     writeHexes();
 
     nodeMesh = instanced(nodeTpl.body, materials.nodeBody, nodes.length);
-    nodes.forEach((n, i) => nodeMesh.setColorAt(i, color.setHex(NODE_COLORS[n.kind])));
-    if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
+    paintNodes();
     writeNodes();
 
     // frame the wall and the board
@@ -541,6 +627,12 @@ export async function createViewer(container, geo) {
     fitOrtho();
     render();
     kick();
+  }
+
+  function paintNodes() {
+    if (!nodeMesh) return;
+    nodeList.forEach((n, i) => nodeMesh.setColorAt(i, palette.node[n.kind]));
+    if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
   }
 
   // all node kinds share one instanced mesh
@@ -625,6 +717,8 @@ export async function createViewer(container, geo) {
     const { clientWidth: w, clientHeight: h } = container;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
+    renderer.getDrawingBufferSize(ink.uniforms.resolution.value);
+    ink.uniforms.width.value = 1.4 * renderer.getPixelRatio();
     perspective.aspect = w / h;
     perspective.updateProjectionMatrix();
     fitOrtho();
@@ -641,5 +735,19 @@ export async function createViewer(container, geo) {
     kick();
   }
 
-  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, wallPoint };
+  // re-reads the CSS colours after the page switches theme
+  function setTheme() {
+    palette = readPalette();
+    materials.led.color.copy(palette.led);
+    materials.led.emissive.copy(palette.led);
+    materials.board.color.copy(palette.board);
+    ink.uniforms.color.value.copy(palette.outline);
+    for (const session of sessions) for (const item of session.nodeItems) item.base.copy(palette.node[item.kind]);
+    paintNodes();
+    writeHexes();
+    sessions.forEach(applySession);
+    render();
+  }
+
+  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, setTheme, wallPoint };
 }

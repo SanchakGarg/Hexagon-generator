@@ -465,7 +465,7 @@ async function startViewer() {
 }
 
 initSections();
-initTheme(() => viewer?.setTheme?.());
+initTheme(() => viewer?.setTheme());
 
 async function start() {
   if (location.protocol === 'file:') {
