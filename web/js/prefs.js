@@ -53,3 +53,25 @@ export function initSections() {
     });
   }
 }
+
+// Named designs, newest first. Each one holds the inputs as typed, in the unit they were typed in.
+const SAVES_KEY = 'hexwall-saves';
+
+export function loadSaves() {
+  try {
+    const list = JSON.parse(read(SAVES_KEY) ?? '[]');
+    return Array.isArray(list) ? list.filter((s) => s && typeof s.name === 'string' && s.config) : [];
+  } catch {
+    return [];
+  }
+}
+
+// false when the browser would not store it
+export function storeSaves(list) {
+  try {
+    localStorage.setItem(SAVES_KEY, JSON.stringify(list));
+    return true;
+  } catch {
+    return false;
+  }
+}

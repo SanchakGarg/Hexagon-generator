@@ -290,6 +290,21 @@ export function summarize(hexes, nodes, lat, edges = []) {
   return { counts, hexagons: hexes.length, groups: countGroups(hexes, nodes) };
 }
 
+// Every node on the wall at its wall position: the ones built into hexagons (from the hexagon model's plate stacks)
+// and Edges, and the joining nodes. Keys are measured from the first grid hexagon, which moves with the whole grid,
+// so a pick survives excluding and restoring hexagons.
+export function placeAllNodes(hexes, nodes, edges, lat, origin) {
+  const out = [];
+  for (const h of hexes) {
+    for (const n of lat.hexNodes) out.push({ x: h.x + n.dx, z: h.z + n.dz, kind: n.mcu ? 'mcu' : 'normal', hexId: h.id });
+  }
+  // an Edge's plate stack sits halfway along it
+  for (const e of edges) out.push({ x: (e.x + e.tipX) / 2, z: (e.z + e.tipZ) / 2, kind: 'normal', hexId: e.hexId });
+  for (const n of nodes) out.push({ x: n.x, z: n.z, kind: n.kind.replace('-', ''), hexId: n.hexId });
+  for (const n of out) n.key = `${Math.round((n.x - origin.x) * 1000)},${Math.round((n.z - origin.z) * 1000)}`;
+  return out;
+}
+
 // Outline of the hexagons as closed loops of corners, each run with the hexagons on its left: the outer boundary
 // goes counter-clockwise and the edge of any hole left by excluded hexagons clockwise.
 export function buildOutline(hexes, lat) {

@@ -50,7 +50,7 @@ function stripPoints(x1, y1, x2, y2, halfWidth) {
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -120,6 +120,16 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const e of edges) parts.push(`<polygon class="edge" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
   for (const n of nodes) {
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
+  }
+
+  // parts page: every node can be picked; picked ones march, ones left without a touch sensor are struck through
+  if (picks) {
+    const r = lat.rho * 1.5;
+    for (const n of picks.nodes) {
+      const cls = `pick${picks.selected.has(n.key) ? ' on' : ''}${picks.noSensor.has(n.key) ? ' nosensor' : ''}`;
+      const d = r * 0.7;
+      parts.push(`<g class="${cls}" data-node="${n.key}"><circle cx="${fmt(n.x)}" cy="${fmt(y(n.z))}" r="${fmt(r)}"/><path d="M${fmt(n.x - d)},${fmt(y(n.z) + d)} L${fmt(n.x + d)},${fmt(y(n.z) - d)}"/></g>`);
+    }
   }
 
   svg.innerHTML = parts.join('');

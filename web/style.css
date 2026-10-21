@@ -99,7 +99,8 @@ svg.defs { position: absolute; width: 0; height: 0; }
 .app {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
-  gap: 28px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 18px 28px;
   height: 100%;
   padding: 22px 24px 22px 72px;
 }
@@ -637,6 +638,21 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .hex.ghost text { fill: var(--muted); }
 .hex.ghost:hover .sketch { stroke: var(--ink); fill: color-mix(in srgb, var(--mint) 35%, transparent); }
 .node:hover { stroke: var(--ink); }
+
+/* node picks on the parts page */
+.pick { cursor: pointer; }
+.pick circle {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 0.15s, fill 0.15s;
+}
+.pick path { stroke: transparent; stroke-width: 2.4; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pick:hover circle { stroke: var(--ink); fill: color-mix(in srgb, var(--page) 35%, transparent); }
+.pick.on circle { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: 5 4; animation: ants 0.9s linear infinite; fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+.pick.nosensor circle { stroke: var(--ink); fill: color-mix(in srgb, var(--page) 70%, transparent); }
+.pick.nosensor path { stroke: var(--accent); }
 .edge:hover { fill: color-mix(in srgb, var(--c-edge) 40%, transparent); stroke: var(--ink); }
 
 /* hidden layers; hexagons stay clickable through the wall-point hit test */
@@ -713,6 +729,84 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 }
 
 .card[data-section="notes"] { --tape: var(--lilac); }
+.card[data-section="nodes"] { --tape: var(--lilac); }
+
+/* one page at a time */
+.app[data-page="1"] [data-page-only="2"],
+.app[data-page="2"] [data-page-only="1"] { display: none; }
+
+.card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
+.bom { min-width: 240px; margin-top: 4px; }
+.bom li { font-size: 1.05rem; line-height: 1.15; padding-block: 3px; }
+.bom b { font-size: 1.25rem; }
+.bom small { display: block; padding-left: 2px; font-size: 0.85rem; color: var(--muted); }
+.tally li { font-size: 1.25rem; }
+
+/* --- footer: saves on the left, pages on the right --------------------------- */
+
+.footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  padding: 2px 4px 0 18px;
+}
+
+.footer-saves,
+.footer-pages { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.footer .count { margin-left: 4px; }
+.status { color: var(--muted); font-size: 1.05rem; }
+.page-count { color: var(--muted); font-size: 1.15rem; }
+
+/* --- dialogs: an index card over a dimmed page --------------------------------- */
+
+.dialog {
+  /* .card makes it relative; the top layer needs it fixed and centred */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  border: 0;
+  color: var(--ink);
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px 16px;
+  overflow: visible;
+  --tape: var(--butter);
+}
+
+.dialog::backdrop { background: rgba(31, 32, 48, 0.35); }
+.dialog[open] { animation: note-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.dialog form,
+.dialog { display: flex; flex-direction: column; gap: 12px; }
+.dialog:not([open]) { display: none; }
+.dialog .note:empty { display: none; }
+.dialog h2 { align-self: flex-start; }
+
+.saves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.saves:empty::before { content: attr(data-empty); color: var(--muted); }
+
+.saves li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 8px;
+  border-bottom: 1.5px solid var(--rule);
+}
+
+.saves li > div { flex: 1; min-width: 0; }
+.saves b { display: block; font-weight: 400; font-size: 1.2rem; overflow-wrap: anywhere; }
+.saves small { color: var(--muted); font-size: 0.95rem; }
+.saves .btn { font-size: 1rem; padding: 1px 10px; }
 
 .ruled {
   list-style: none;
@@ -791,11 +885,13 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   body::before { left: 10px; }
   .app {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     height: auto;
     padding: 16px;
     gap: 22px;
   }
   .stage { order: -1; padding-left: 14px; }
+  .footer { padding-left: 0; }
   .stage::before { width: 28px; }
   .viewport { flex: none; width: 100%; aspect-ratio: 1; max-height: 70vh; }
   .side { overflow: visible; padding: 4px 2px 12px; }

@@ -1,14 +1,20 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes } from './layout.js';
 import { renderWall } from './render.js';
-import { initTheme, initSections } from './prefs.js';
+import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
   '2d': 'hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
   '3d': 'hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
+  parts: 'click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
+const PAGES = ['configure', 'parts list'];
+// LED strip: each channel holds 15 LEDs, the strip has 60 per metre and comes in 5 m rolls
+const LEDS_PER_CHANNEL = 15;
+const LEDS_PER_M = 60;
+const ROLL_M = 5;
 const MAX_ZOOM = 40;
 const CLICK_SLOP = 4; // px a pointer may move and still count as a click
 
@@ -39,11 +45,17 @@ let lastLayout = null;
 let view = '2d';
 let viewer = null;
 let boardOn = true;
+let page = 1;
+let savedName = '';
 
 // hexagons are tracked by grid position, so a selection survives small wall edits
 const keyOf = (h) => `${h.row}:${h.col}`;
 const selected = new Set();
 const excluded = new Set();
+// on the parts page single nodes are picked, and some can be built without a touch sensor
+const nodePicks = new Set();
+const noSensor = new Set();
+let allNodes = [];
 
 // which kinds of part are drawn; hidden parts still count and hexagons stay clickable
 const LAYERS = layerButtons.map((b) => b.dataset.layer);
@@ -71,16 +83,59 @@ function resetZoom() {
   applyViewBox();
 }
 
-// selection and exclusion live in a strip on the drawing, shown only while there is something to act on
+// selection and exclusion live in a strip on the drawing, shown only while there is something to act on; on the
+// parts page the same strip picks nodes and leaves their touch sensors out
 function renderPicks() {
-  const sel = gridHexes.filter((h) => selected.has(keyOf(h))).length;
-  const exc = gridHexes.filter((h) => excluded.has(keyOf(h))).length;
+  const parts = page === 2;
+  const present = new Set(allNodes.map((n) => n.key));
+  const sel = parts ? nodePicks.size : gridHexes.filter((h) => selected.has(keyOf(h))).length;
+  const exc = parts ? [...noSensor].filter((k) => present.has(k)).length : gridHexes.filter((h) => excluded.has(keyOf(h))).length;
   $('selected-count').textContent = sel;
   $('excluded-count').textContent = exc;
+  $('selected-label').textContent = parts ? `node${sel === 1 ? '' : 's'} picked` : 'selected';
+  $('excluded-label').textContent = parts ? 'without touch sensor' : 'excluded';
+  excludeBtn.textContent = parts ? 'no touch sensor' : 'exclude';
+  restoreBtn.textContent = parts ? 'add sensors back' : 'restore all';
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
   pickBar.hidden = sel === 0 && exc === 0;
   hint.classList.toggle('pushed', !pickBar.hidden);
+}
+
+// what to buy for the wall as it stands
+function renderBom(s, hexes, edges, rim) {
+  const present = new Set(allNodes.map((n) => n.key));
+  const skipped = [...noSensor].filter((k) => present.has(k)).length;
+  const pixels = s.counts.leds * LEDS_PER_CHANNEL;
+  const metres = pixels / LEDS_PER_M;
+  const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
+  const rows = [
+    [hexes.length, 'hexagon panels'],
+    [edges.length, 'Edge pieces'],
+    [s.counts.edge, 'edge nodes'],
+    [s.counts['2way'], '2-way nodes'],
+    [s.counts['3way'], '3-way nodes'],
+    [s.counts.nodes - skipped, 'touch sensors', skipped ? `1 per node, ${skipped} left out` : '1 per node'],
+    [Math.ceil(pixels / (LEDS_PER_M * ROLL_M)), `LED strip rolls (${ROLL_M} m)`, `${pixels} LEDs · ${+metres.toFixed(2)} m at ${LEDS_PER_M}/m`],
+    [hexes.length, 'ESP32 Ethernet boards', '1 per hexagon · WT32-ETH01 works'],
+  ];
+  if (boardOn && rim.length) rows.push([1, 'backboard', `${formatLength(span('x'))} × ${formatLength(span('z'))}`]);
+  $('bom').replaceChildren(
+    ...rows
+      .filter(([n]) => n > 0)
+      .map(([n, label, note]) => {
+        const li = document.createElement('li');
+        const b = document.createElement('b');
+        b.textContent = n;
+        li.append(b, ` ${label}`);
+        if (note) {
+          const small = document.createElement('small');
+          small.textContent = note;
+          li.append(small);
+        }
+        return li;
+      }),
+  );
 }
 
 function update() {
@@ -111,7 +166,11 @@ function update() {
   const s = summarize(hexes, nodes, lattice, edges);
   const outline = buildOutline(hexes, lattice);
   lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { on: boardOn, t, raise }, outline };
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
+  allNodes = gridHexes.length ? placeAllNodes(hexes, nodes, edges, lattice, gridHexes[0]) : [];
+  const present = new Set(allNodes.map((n) => n.key));
+  for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
+  const picks = page === 2 ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
@@ -130,10 +189,13 @@ function update() {
   for (const el of document.querySelectorAll('#layers [data-count]')) el.textContent = s.counts[el.dataset.count];
   $('total-nodes').textContent = s.counts.nodes;
   $('total-leds').textContent = s.counts.leds;
+  $('tally-nodes').textContent = s.counts.nodes;
+  $('tally-leds').textContent = s.counts.leds;
   // the board follows the outline, grown so the node bodies sit on it
   const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   $('board-size').textContent = boardOn && rim.length ? `board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
+  renderBom(s, hexes, edges, rim);
 
   if (gridHexes.length === 0) {
     note.textContent = `Wall too small. One hexagon needs at least ${formatLength(2 * lattice.hw)} × ${formatLength(2 * lattice.hh)}.`;
@@ -224,6 +286,23 @@ function hexAt(p) {
   return null;
 }
 
+// the node whose body holds a wall point, on the parts page
+function nodeAt(p) {
+  if (!p) return null;
+  let best = null;
+  for (const n of allNodes) {
+    const d = Math.hypot(p.x - n.x, p.z - n.z);
+    if (d <= lattice.rho * 1.6 && (!best || d < best.d)) best = { key: n.key, d };
+  }
+  return best?.key ?? null;
+}
+
+function togglePick(key) {
+  if (nodePicks.has(key)) nodePicks.delete(key);
+  else nodePicks.add(key);
+  update();
+}
+
 // SVG overlay coordinates have y running down from the wall's top edge
 const wallFromSvg = (e) => {
   const p = svgPoint(e);
@@ -240,17 +319,25 @@ function toggleSelect(id) {
 }
 
 excludeBtn.addEventListener('click', () => {
+  if (page === 2) {
+    for (const key of nodePicks) noSensor.add(key);
+    nodePicks.clear();
+    update();
+    return;
+  }
   for (const key of selected) excluded.add(key);
   selected.clear();
   hover(null);
   update();
 });
 clearBtn.addEventListener('click', () => {
+  nodePicks.clear();
   selected.clear();
   update();
 });
 restoreBtn.addEventListener('click', () => {
-  excluded.clear();
+  if (page === 2) noSensor.clear();
+  else excluded.clear();
   update();
 });
 
@@ -265,7 +352,7 @@ function setView(next) {
   }
   // the overlay leaves as the camera starts to fly and comes back once it has landed on the front view
   if (next === '3d') svg.toggleAttribute('hidden', true);
-  hint.textContent = HINTS[next];
+  hint.textContent = page === 2 ? HINTS.parts : HINTS[next];
   hover(null);
   viewer.setMode(next).then(() => {
     if (view === '2d') svg.toggleAttribute('hidden', false);
@@ -309,14 +396,168 @@ $('hide-all-btn').addEventListener('click', () => {
 });
 
 // the switch sits in the card's title row, so it must not also fold the card
-boardToggle.addEventListener('click', (e) => {
-  e.preventDefault();
-  boardOn = !boardOn;
+function setBoard(on) {
+  boardOn = on;
   boardToggle.setAttribute('aria-checked', String(boardOn));
   for (const input of [thicknessIn, raiseIn]) input.disabled = !boardOn;
   $('board-body').classList.toggle('off', !boardOn);
+}
+boardToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  setBoard(!boardOn);
   update();
 });
+
+// --- pages: configure the wall, then the parts list ----------------------------
+
+const app = document.querySelector('.app');
+const backBtn = $('back-btn');
+const nextBtn = $('next-btn');
+
+function setPage(next) {
+  page = next;
+  app.dataset.page = String(page);
+  $('page-count').textContent = `page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
+  backBtn.hidden = page === 1;
+  nextBtn.hidden = page === PAGES.length;
+  // each page picks its own things
+  selected.clear();
+  nodePicks.clear();
+  hover(null);
+  hint.textContent = page === 2 ? HINTS.parts : HINTS[view];
+  if (lattice) update();
+}
+backBtn.addEventListener('click', () => setPage(page - 1));
+nextBtn.addEventListener('click', () => setPage(page + 1));
+
+// --- saves: named designs kept in this browser ------------------------------
+
+const saveDialog = $('save-dialog');
+const openDialog = $('open-dialog');
+const saveName = $('save-name');
+const saveError = $('save-error');
+let statusTimer = 0;
+
+function status(text) {
+  $('save-status').textContent = text;
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => ($('save-status').textContent = ''), 4000);
+}
+
+const snapshot = () => ({
+  unit,
+  width: widthIn.value,
+  height: heightIn.value,
+  thickness: thicknessIn.value,
+  raise: raiseIn.value,
+  board: boardOn,
+  excluded: [...excluded],
+  noSensor: [...noSensor],
+  show: { ...show },
+});
+
+function restore(c) {
+  if (UNITS[c.unit]) {
+    unit = c.unit;
+    for (const b of unitButtons) b.setAttribute('aria-pressed', String(b.dataset.unit === unit));
+    for (const el of document.querySelectorAll('[data-unit-label]')) el.textContent = unit;
+  }
+  widthIn.value = c.width ?? widthIn.value;
+  heightIn.value = c.height ?? heightIn.value;
+  thicknessIn.value = c.thickness ?? thicknessIn.value;
+  raiseIn.value = c.raise ?? raiseIn.value;
+  setBoard(c.board !== false);
+  for (const [set, list] of [[excluded, c.excluded], [noSensor, c.noSensor]]) {
+    set.clear();
+    for (const k of list ?? []) set.add(k);
+  }
+  selected.clear();
+  nodePicks.clear();
+  for (const l of LAYERS) show[l] = c.show?.[l] !== false;
+  applyLayers();
+  if (lattice) update();
+}
+
+const savesCount = () => ($('saves-count').textContent = loadSaves().length);
+
+$('save-btn').addEventListener('click', () => {
+  saveName.value = savedName;
+  saveError.textContent = '';
+  saveDialog.showModal();
+  saveName.select();
+});
+
+$('save-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = saveName.value.trim();
+  if (!name) {
+    saveError.textContent = 'Give the design a name to save it.';
+    saveName.focus();
+    return;
+  }
+  const saves = loadSaves();
+  const replaced = saves.some((x) => x.name === name);
+  const next = [{ name, savedAt: Date.now(), config: snapshot() }, ...saves.filter((x) => x.name !== name)];
+  if (!storeSaves(next)) {
+    saveError.textContent = 'This browser would not store it (private window or storage blocked).';
+    return;
+  }
+  savedName = name;
+  saveDialog.close();
+  savesCount();
+  status(`${replaced ? 'replaced' : 'saved'} “${name}”`);
+});
+
+function renderSaves() {
+  const list = $('saves-list');
+  list.replaceChildren(
+    ...loadSaves().map((save) => {
+      const li = document.createElement('li');
+      const text = document.createElement('div');
+      const name = document.createElement('b');
+      name.textContent = save.name;
+      const meta = document.createElement('small');
+      const c = save.config;
+      meta.textContent = `${c.width} × ${c.height} ${c.unit} · ${new Date(save.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+      text.append(name, meta);
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'btn';
+      open.textContent = 'open';
+      open.addEventListener('click', () => {
+        savedName = save.name;
+        restore(c);
+        openDialog.close();
+        status(`opened “${save.name}”`);
+      });
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn';
+      del.textContent = 'delete';
+      del.setAttribute('aria-label', `Delete ${save.name}`);
+      del.addEventListener('click', () => {
+        if (!confirm(`Delete “${save.name}”? This can't be undone.`)) return;
+        storeSaves(loadSaves().filter((x) => x.name !== save.name));
+        renderSaves();
+        savesCount();
+      });
+      li.append(text, open, del);
+      return li;
+    }),
+  );
+}
+
+$('open-btn').addEventListener('click', () => {
+  renderSaves();
+  openDialog.showModal();
+});
+
+for (const dialog of [saveDialog, openDialog]) {
+  for (const b of dialog.querySelectorAll('[data-close]')) b.addEventListener('click', () => dialog.close());
+  // a click on the backdrop lands on the dialog itself
+  dialog.addEventListener('click', (e) => e.target === dialog && dialog.close());
+}
+savesCount();
 
 btn2d.addEventListener('click', () => setView('2d'));
 btn3d.addEventListener('click', () => setView('3d'));
@@ -358,6 +599,11 @@ svg.addEventListener('pointerup', () => {
   svg.classList.remove('panning');
   if (!was || was.moved) return;
   // pointer capture retargets events to the svg, so use the element pressed on
+  if (page === 2) {
+    const key = nodeAt(was.point);
+    if (key) togglePick(key);
+    return;
+  }
   const ghost = was.target.closest('[data-ghost]');
   const id = hexAt(was.point);
   if (id) {
@@ -386,7 +632,7 @@ svg.addEventListener('pointermove', (e) => {
     }
     return;
   }
-  hover(hexAt(wallFromSvg(e)));
+  hover(page === 2 ? null : hexAt(wallFromSvg(e)));
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -412,14 +658,20 @@ function wire3d(canvas) {
   });
   canvas.addEventListener('pointermove', (e) => {
     if (view !== '3d' || e.buttons) return;
-    hover(hexAt(viewer.wallPoint(e.clientX, e.clientY)));
+    hover(page === 2 ? null : hexAt(viewer.wallPoint(e.clientX, e.clientY)));
   });
   canvas.addEventListener('pointerup', (e) => {
     const p = press;
     press = null;
     if (view !== '3d' || !p || p.button !== 0) return;
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_SLOP) return;
-    const id = hexAt(viewer.wallPoint(e.clientX, e.clientY));
+    const point = viewer.wallPoint(e.clientX, e.clientY);
+    if (page === 2) {
+      const key = nodeAt(point);
+      if (key) togglePick(key);
+      return;
+    }
+    const id = hexAt(point);
     if (id) toggleSelect(id);
   });
   canvas.addEventListener('pointerleave', () => hover(null));
@@ -459,6 +711,14 @@ async function start() {
     lattice.edge = deriveEdge(geometry.edgeFrames, geometry.edgeVisuals, lattice);
     lattice.perHex = partsOf(geometry.hexVisuals);
     lattice.perEdge = partsOf(geometry.edgeVisuals);
+    // each plate stack in the hexagon model is a built-in node; the one at the centre is the MCU node
+    lattice.hexNodes = geometry.hexVisuals
+      .filter((v) => v.part === 'middle_plate')
+      .map((v) => {
+        const dx = v.xyz[0] - lattice.hexCenter.x;
+        const dz = v.xyz[2] - lattice.hexCenter.z;
+        return { dx, dz, mcu: Math.hypot(dx, dz) < 0.05 };
+      });
   } catch (err) {
     $('note').textContent = `Could not read the URDF files: ${err.message}`;
     return;
