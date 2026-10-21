@@ -353,22 +353,24 @@ function showHexCard(id) {
 
 // placed hexagon whose outline contains a wall point, so channels and the gaps between them all count; a node and
 // an Edge count as part of the hexagon they belong to
-function hexAt(p) {
+// the hexagon at a wall point; an Edge counts as its hexagon's only for clicks, so hovering one does nothing
+function hexAt(p, { edges = true } = {}) {
   if (!p || !lastLayout) return null;
   const { R } = lattice;
   const node = lastLayout.nodes.find((n) => Math.hypot(p.x - n.x, p.z - n.z) <= lattice.rho);
   if (node) return node.hexId;
+  // an Edge lies on its hexagon's outer side, half inside the outline, so it is tested before the hexagons
+  for (const e of lastLayout.edges) {
+    const vx = e.tipX - e.x;
+    const vz = e.tipZ - e.z;
+    const t = Math.max(0, Math.min(1, ((p.x - e.x) * vx + (p.z - e.z) * vz) / (vx * vx + vz * vz)));
+    if (Math.hypot(p.x - (e.x + t * vx), p.z - (e.z + t * vz)) <= lattice.rho) return edges ? e.hexId : null;
+  }
   const half = (R * Math.sqrt(3)) / 2;
   for (const h of lastLayout.hexes) {
     const dx = Math.abs(p.x - h.x);
     const dz = Math.abs(p.z - h.z);
     if (dx <= half && dz <= R - dx / Math.sqrt(3)) return h.id;
-  }
-  for (const e of lastLayout.edges) {
-    const vx = e.tipX - e.x;
-    const vz = e.tipZ - e.z;
-    const t = Math.max(0, Math.min(1, ((p.x - e.x) * vx + (p.z - e.z) * vz) / (vx * vx + vz * vz)));
-    if (Math.hypot(p.x - (e.x + t * vx), p.z - (e.z + t * vz)) <= lattice.rho) return e.hexId;
   }
   return null;
 }
@@ -1004,7 +1006,7 @@ svg.addEventListener('pointermove', (e) => {
     }
     return;
   }
-  hover(page !== 1 ? null : hexAt(wallFromSvg(e)));
+  hover(page !== 1 ? null : hexAt(wallFromSvg(e), { edges: false }));
   if (page === LABELS_PAGE) focusWire(e.target);
   const target = e.target.closest('[data-tip]');
   if (!target) {
@@ -1032,7 +1034,7 @@ function wire3d(canvas) {
   });
   canvas.addEventListener('pointermove', (e) => {
     if (view !== '3d' || e.buttons) return;
-    hover(page !== 1 ? null : hexAt(viewer.wallPoint(e.clientX, e.clientY)));
+    hover(page !== 1 ? null : hexAt(viewer.wallPoint(e.clientX, e.clientY), { edges: false }));
   });
   canvas.addEventListener('pointerup', (e) => {
     const p = press;

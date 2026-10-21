@@ -875,7 +875,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .pick.on circle { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: 5 4; animation: ants 0.9s linear infinite; fill: color-mix(in srgb, var(--accent) 18%, transparent); }
 .pick.nosensor circle { stroke: var(--ink); fill: color-mix(in srgb, var(--page) 70%, transparent); }
 .pick.nosensor path { stroke: var(--accent); }
-.edge:hover { fill: color-mix(in srgb, var(--c-edge) 40%, transparent); stroke: var(--ink); }
 
 /* hidden layers; hexagons stay clickable through the wall-point hit test */
 .hide-normal.hide-led .hex:not(.ghost):not(.selected) polygon { visibility: hidden; }
