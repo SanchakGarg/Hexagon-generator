@@ -1,7 +1,7 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
-import { buildWiring, strandPaths } from './wiring.js';
+import { buildWiring, strandPaths, channelArrows } from './wiring.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -10,6 +10,7 @@ const HINTS = {
   '2d': 'Hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
   labels: 'Hover a wire or connector for its pins · scroll to zoom · drag to pan · double-click to reset',
+  channels: 'Hover a channel for its DIN and DOUT · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
 const PAGES = ['Configure', 'Node labels', 'Parts list'];
@@ -253,14 +254,17 @@ function update() {
   for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
   const picks = page === PARTS_PAGE ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
   const labels = page === LABELS_PAGE ? allNodes : null;
-  const wiring = labels ? strandPaths(buildWiring(hexes, edges, lattice, allNodes), lattice) : null;
+  // the labels page draws either the strip wiring or an arrow along every LED channel
+  const topology = labels ? buildWiring(hexes, edges, lattice, allNodes) : null;
+  const wiring = topology && wiringView === 'wiring' ? strandPaths(topology, lattice) : null;
+  const arrows = topology && wiringView === 'channels' ? channelArrows(topology, lattice) : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
   viewer?.update(lastLayout);
-  viewer?.setWiring(wiring);
+  viewer?.setWiring(wiring, arrows);
   focusChain(focusedChain, focusedHex);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
@@ -518,6 +522,19 @@ function focusWire(target) {
   const hexId = wire?.dataset.hex ?? null;
   if (chain !== focusedChain || hexId !== focusedHex) focusChain(chain, hexId);
 }
+// the labels page shows the strip wiring or the LED channels' data direction
+let wiringView = 'wiring';
+const wiringSwitch = $('wiring-switch');
+function setWiringView(next) {
+  wiringView = next;
+  document.querySelector('.app').dataset.wview = next;
+  for (const b of wiringSwitch.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.wview === next));
+  tip.hidden = true;
+  if (viewer) hint.textContent = hintFor(view);
+  if (lattice) update();
+}
+for (const b of wiringSwitch.querySelectorAll('button')) b.addEventListener('click', () => setWiringView(b.dataset.wview));
+
 // moving from one row to the next swaps the chain straight over; only leaving the key clears it
 const wiringKey = $('wiring-key');
 for (const row of wiringKey.querySelectorAll('[data-chain]')) {
@@ -530,7 +547,8 @@ wiringKey.addEventListener('pointerleave', () => focusChain(null));
 const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
-const hintFor = (v) => (page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS.labels : HINTS[v]);
+const hintFor = (v) =>
+  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'channels' ? 'channels' : 'labels'] : HINTS[v];
 
 function setPage(next) {
   page = next;

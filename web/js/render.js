@@ -91,8 +91,26 @@ function wiringSvg(w, y) {
   return out.join('');
 }
 
+// The LED channels view: one arrow along each channel from DIN to DOUT, in the colour of the chain that drives it.
+function arrowsSvg(arrows, lat, y) {
+  const head = lat.rho * 0.55;
+  const out = ['<g class="wiring chans">'];
+  for (const a of arrows) {
+    const base = { x: a.b.x - a.u.x * head, z: a.b.z - a.u.z * head };
+    const n = { x: -a.u.z * head * 0.5, z: a.u.x * head * 0.5 };
+    const tri = [a.b, { x: base.x + n.x, z: base.z + n.z }, { x: base.x - n.x, z: base.z - n.z }];
+    const attrs = `data-chain="${a.chain}" data-hex="${a.hexId}"`;
+    const tip = `Channel ${a.channel} · ${a.chain}\nDIN @ ${a.din} → DOUT @ ${a.dout}`;
+    out.push(`<path class="hit" ${attrs} d="${line([a.a, a.b], y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="arrow w-${a.key}" ${attrs} d="${line([a.a, base], y)}"/>`);
+    out.push(`<polygon class="head w-${a.key}" ${attrs} points="${tri.map((p) => `${fmt(p.x)},${fmt(y(p.z))}`).join(' ')}"/>`);
+  }
+  out.push('</g>');
+  return out.join('');
+}
+
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -166,6 +184,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
 
   // labels page: the LED wiring, under the node labels
   if (wiring) parts.push(wiringSvg(wiring, y));
+  if (channelArrows) parts.push(arrowsSvg(channelArrows, lat, y));
 
   // labels page: a tiny label at the centre of every node, the same set in each hexagon
   if (labels) {

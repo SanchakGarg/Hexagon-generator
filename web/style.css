@@ -928,6 +928,16 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring.focus [data-chain]:not(.lit):not(.sheath):not(.hit) { opacity: 0.22; }
 .hide-wiring .wiring { display: none; }
 
+/* LED channels view: an arrow from DIN to DOUT on every channel */
+.wiring .arrow { stroke: var(--w); stroke-width: 2.6px; stroke-linecap: butt; pointer-events: none; }
+.wiring .head { fill: var(--w); stroke: var(--page); stroke-width: 1px; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+
+/* strip wiring or LED channels, on the labels page; on a phone it sits under the 2D/3D switch */
+.wiring-switch { position: absolute; top: 14px; left: 50%; translate: -50% 0; z-index: 3; background: var(--page); }
+.app:not([data-page="2"]) .wiring-switch { display: none; }
+.app[data-wview="channels"] [data-wview-only="wiring"],
+.app:not([data-wview="channels"]) [data-wview-only="channels"] { display: none; }
+
 /* the wiring key in the notes card */
 .labels-key { width: 280px; }
 .labels-key .help { margin: 0; font-size: 0.95rem; line-height: 1.2; }
@@ -1229,6 +1239,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .hint { display: none; }
   .pick-bar { left: 24px; bottom: auto; top: 56px; max-width: calc(100% - 40px); }
   /* keeps clear of the spiral binding down the drawing's left edge */
+  .wiring-switch { top: 52px; left: auto; right: 16px; translate: none; }
   .card.totals { right: 10px; bottom: 10px; min-width: 0; max-width: calc(100% - 44px); max-height: calc(100% - 64px); padding: 8px 12px 6px; }
   .bom { min-width: 0; }
   .labels-key { width: auto; max-width: 280px; }

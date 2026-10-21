@@ -73,6 +73,28 @@ export const channelName = (c) => `${nm(c.in)}→${nm(c.out)}`;
 export const chainPath = (chain) =>
   chain.hops.map((hop, i) => (i === 0 ? nm(hop.from) : '') + (hop.wire === 'FREE' ? ' ⇢ ' : '→') + nm(hop.to)).join('');
 
+// One arrow per LED channel, from its DIN end to its DOUT end, stopping at the node bodies; for the LED channels view.
+export function channelArrows({ channels }, lat) {
+  const trim = lat.rho * 1.05;
+  return channels.map((c) => {
+    const dx = c.out.x - c.in.x;
+    const dz = c.out.z - c.in.z;
+    const len = Math.hypot(dx, dz);
+    const u = { x: dx / len, z: dz / len };
+    return {
+      chain: c.chain,
+      key: c.chain.slice(1),
+      hexId: c.hexId,
+      channel: channelName(c),
+      din: nm(c.in),
+      dout: nm(c.out),
+      a: { x: c.in.x + u.x * trim, z: c.in.z + u.z * trim },
+      b: { x: c.out.x - u.x * trim, z: c.out.z - u.z * trim },
+      u,
+    };
+  });
+}
+
 // Smooth wall-space polylines for every wire, shared by the 2D drawing and the 3D model. A channel's four wires run
 // side by side in lanes and bow a little along it, like loose cable; a chain's signal wire bends round each node
 // into the next channel, and at a switch it crosses from one lane to the other.

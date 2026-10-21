@@ -143,6 +143,10 @@
       </nav>
       <div class="viewport" id="viewport">
         <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout, front view"></svg>
+        <div class="seg wiring-switch" role="group" aria-label="What the labels page draws" id="wiring-switch">
+          <button type="button" data-wview="wiring" aria-pressed="true">Strip wiring</button>
+          <button type="button" data-wview="channels" aria-pressed="false">LED channels</button>
+        </div>
         <div class="seg view-switch" role="group" aria-label="View">
           <button type="button" id="view-2d" aria-pressed="true">2D</button>
           <button type="button" id="view-3d" aria-pressed="false" disabled>3D</button>
@@ -175,8 +179,10 @@
                 <p class="line"><span>Corners, clockwise</span><b>a–f</b></p>
                 <p class="line"><span>Edge plates</span><b>E1–E3</b></p>
               </div>
-              <h2 class="key-head">Wiring</h2>
-              <p class="help">Each hexagon's M drives six chains. Hover one to pick it out.</p>
+              <h2 class="key-head" data-wview-only="wiring">Wiring</h2>
+              <h2 class="key-head" data-wview-only="channels">LED channels</h2>
+              <p class="help" data-wview-only="wiring">Each hexagon's M drives six chains. Hover one to pick it out.</p>
+              <p class="help" data-wview-only="channels">Each arrow runs from a channel's DIN to its DOUT, in the colour of the chain that drives it.</p>
               <div class="wkey" id="wiring-key">
                 <p class="chain w-1" data-chain="L1"><i class="swatch"></i><b>L1</b></p>
                 <p class="chain w-2" data-chain="L2"><i class="swatch"></i><b>L2</b></p>
@@ -185,7 +191,7 @@
                 <p class="chain w-5" data-chain="L5"><i class="swatch"></i><b>L5</b></p>
                 <p class="chain w-6" data-chain="L6"><i class="swatch"></i><b>L6</b></p>
               </div>
-              <div class="wkey">
+              <div class="wkey" data-wview-only="wiring">
                 <div class="wires">
                   <span class="pin-5v"><i class="swatch"></i>5V</span>
                   <span class="pin-gnd"><i class="swatch"></i>GND</span>

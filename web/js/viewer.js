@@ -1026,9 +1026,26 @@ export async function createViewer(container, geo) {
     return out;
   }
 
-  function setWiring(paths) {
+  // an arrow along each LED channel from DIN to DOUT: a thin rod and a cone at the DOUT end
+  function arrowGeometries(a, y, r) {
+    const head = lattice.rho * 0.55;
+    const dir = new THREE.Vector3(a.u.x, 0, a.u.z);
+    const q = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir);
+    const len = Math.hypot(a.b.x - a.a.x, a.b.z - a.a.z) - head;
+    const shaft = new THREE.CylinderGeometry(r, r, len, 8);
+    shaft.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(a.a.x + a.u.x * len / 2, y, a.a.z + a.u.z * len / 2), q, ONE));
+    const cone = new THREE.ConeGeometry(head * 0.5, head, 14);
+    cone.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(a.b.x - a.u.x * head / 2, y, a.b.z - a.u.z * head / 2), q, ONE));
+    // the rod has caps the cone lacks, so both lose their extra attributes before merging
+    return [shaft.toNonIndexed(), cone.toNonIndexed()].map((g) => {
+      for (const name of Object.keys(g.attributes)) if (!['position', 'normal'].includes(name)) g.deleteAttribute(name);
+      return g;
+    });
+  }
+
+  function setWiring(paths, arrows = null) {
     clearWiring();
-    if (!paths || !lattice) {
+    if ((!paths && !arrows) || !lattice) {
       render();
       return;
     }
@@ -1046,8 +1063,9 @@ export async function createViewer(container, geo) {
       if (!groups.has(key)) groups.set(key, { cssVar, chain: key.split(':')[1], list: [] });
       groups.get(key).list.push(geometry);
     };
-    for (const p of paths.power) add(`${p.which}:${p.chain.slice(1)}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
-    for (const sgl of paths.signals) {
+    for (const a of arrows ?? []) for (const g of arrowGeometries(a, y, r * 1.6)) add(`arrow:${a.key}`, `--w-l${a.key}`, g);
+    for (const p of paths?.power ?? []) add(`${p.which}:${p.chain.slice(1)}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
+    for (const sgl of paths?.signals ?? []) {
       const pieces = sgl.wire === 'FREE' ? dashes(sgl.points, lattice.rho * 0.35, lattice.rho * 0.22) : [sgl.points];
       for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.key}`, `--w-l${sgl.key}`, tube(piece, y, r, lift));
     }
