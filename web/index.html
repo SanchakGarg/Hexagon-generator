@@ -28,7 +28,7 @@
     </filter>
   </svg>
 
-  <div class="app" data-page="1">
+  <div class="app" data-page="1" data-wview="channels">
     <aside class="side">
       <header class="masthead">
         <div>
@@ -144,8 +144,9 @@
       <div class="viewport" id="viewport">
         <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout, front view"></svg>
         <div class="seg wiring-switch" role="group" aria-label="What the labels page draws" id="wiring-switch">
-          <button type="button" data-wview="wiring" aria-pressed="true">Strip wiring</button>
-          <button type="button" data-wview="channels" aria-pressed="false">LED channels</button>
+          <button type="button" data-wview="channels" aria-pressed="true">LED channels</button>
+          <button type="button" data-wview="wiring" aria-pressed="false">Strip wiring</button>
+          <button type="button" data-wview="touch" aria-pressed="false">Touch sensors</button>
         </div>
         <div class="seg view-switch" role="group" aria-label="View">
           <button type="button" id="view-2d" aria-pressed="true">2D</button>
@@ -183,7 +184,15 @@
               <h2 class="key-head" data-wview-only="channels">LED channels</h2>
               <p class="help" data-wview-only="wiring">Each hexagon's M drives six chains. Hover one to pick it out.</p>
               <p class="help" data-wview-only="channels">Each arrow runs from a channel's DIN to its DOUT, in the colour of the chain that drives it.</p>
-              <div class="wkey" id="wiring-key">
+              <h2 class="key-head" data-wview-only="touch">Touch sensors</h2>
+              <p class="help" data-wview-only="touch">Each node's sensor is wired to the node shown, starting at the dot; a ring is a node that takes its own. Hover one to pick it out.</p>
+              <div class="wkey tkey" id="touch-key" data-wview-only="touch">
+                <p class="chain t-m" data-chain="TM"><i class="swatch"></i><b>→ M</b></p>
+                <p class="chain t-3" data-chain="T3"><i class="swatch"></i><b>→ 3</b></p>
+                <p class="chain t-6" data-chain="T6"><i class="swatch"></i><b>→ 6</b></p>
+                <p class="chain t-9" data-chain="T9"><i class="swatch"></i><b>→ 9</b></p>
+              </div>
+              <div class="wkey" id="wiring-key" data-wview-not="touch">
                 <p class="chain w-1" data-chain="L1"><i class="swatch"></i><b>L1</b></p>
                 <p class="chain w-2" data-chain="L2"><i class="swatch"></i><b>L2</b></p>
                 <p class="chain w-3" data-chain="L3"><i class="swatch"></i><b>L3</b></p>

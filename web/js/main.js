@@ -1,7 +1,7 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
-import { buildWiring, strandPaths, channelArrows } from './wiring.js';
+import { buildWiring, strandPaths, channelArrows, buildSensors, sensorPaths } from './wiring.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -11,6 +11,7 @@ const HINTS = {
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
   labels: 'Hover a wire or connector for its pins · scroll to zoom · drag to pan · double-click to reset',
   channels: 'Hover a channel for its DIN and DOUT · scroll to zoom · drag to pan · double-click to reset',
+  touch: 'Hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
 const PAGES = ['Configure', 'Node labels', 'Parts list'];
@@ -254,17 +255,18 @@ function update() {
   for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
   const picks = page === PARTS_PAGE ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
   const labels = page === LABELS_PAGE ? allNodes : null;
-  // the labels page draws either the strip wiring or an arrow along every LED channel
-  const topology = labels ? buildWiring(hexes, edges, lattice, allNodes) : null;
+  // the labels page draws the LED channels' data direction, the strip wiring or the touch sensor wiring
+  const topology = labels && wiringView !== 'touch' ? buildWiring(hexes, edges, lattice, allNodes) : null;
   const wiring = topology && wiringView === 'wiring' ? strandPaths(topology, lattice) : null;
   const arrows = topology && wiringView === 'channels' ? channelArrows(topology, lattice) : null;
+  const sensors = labels && wiringView === 'touch' ? sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice) : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows, sensors });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
   viewer?.update(lastLayout);
-  viewer?.setWiring(wiring, arrows);
+  viewer?.setWiring(wiring, arrows, sensors);
   focusChain(focusedChain, focusedHex);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
@@ -523,7 +525,7 @@ function focusWire(target) {
   if (chain !== focusedChain || hexId !== focusedHex) focusChain(chain, hexId);
 }
 // the labels page shows the strip wiring or the LED channels' data direction
-let wiringView = 'wiring';
+let wiringView = 'channels';
 const wiringSwitch = $('wiring-switch');
 function setWiringView(next) {
   wiringView = next;
@@ -536,11 +538,12 @@ function setWiringView(next) {
 for (const b of wiringSwitch.querySelectorAll('button')) b.addEventListener('click', () => setWiringView(b.dataset.wview));
 
 // moving from one row to the next swaps the chain straight over; only leaving the key clears it
-const wiringKey = $('wiring-key');
-for (const row of wiringKey.querySelectorAll('[data-chain]')) {
-  row.addEventListener('pointerenter', () => row.dataset.chain !== focusedChain && focusChain(row.dataset.chain));
+for (const key of [$('wiring-key'), $('touch-key')]) {
+  for (const row of key.querySelectorAll('[data-chain]')) {
+    row.addEventListener('pointerenter', () => row.dataset.chain !== focusedChain && focusChain(row.dataset.chain));
+  }
+  key.addEventListener('pointerleave', () => focusChain(null));
 }
-wiringKey.addEventListener('pointerleave', () => focusChain(null));
 
 // --- pages: configure the wall, label its nodes, then the parts list ----------------------------
 
@@ -548,7 +551,7 @@ const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
 const hintFor = (v) =>
-  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'channels' ? 'channels' : 'labels'] : HINTS[v];
+  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'wiring' ? 'labels' : wiringView] : HINTS[v];
 
 function setPage(next) {
   page = next;

@@ -39,6 +39,11 @@
   --w-l4: #8e4fd6;
   --w-l5: #2c9c4f;
   --w-l6: #d6458f;
+  /* touch sensor wires, by the node that collects them */
+  --t-m: #b5179e;
+  --t-3: #1c7ed6;
+  --t-6: #e8590c;
+  --t-9: #2b8a3e;
   --hl: 80%; /* highlighter strength */
 
   --hand: "Patrick Hand", "Segoe Print", "Bradley Hand", system-ui, sans-serif;
@@ -87,6 +92,10 @@
   --w-l4: #b78cff;
   --w-l5: #6fd48c;
   --w-l6: #ff85c0;
+  --t-m: #f06fd0;
+  --t-3: #74b9ff;
+  --t-6: #ff9f5a;
+  --t-9: #69db7c;
 }
 
 * { box-sizing: border-box; }
@@ -929,20 +938,33 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .hide-wiring .wiring { display: none; }
 
 /* LED channels view: an arrow from DIN to DOUT on every channel */
-.wiring .arrow { stroke: var(--w); stroke-width: 2.6px; stroke-linecap: butt; pointer-events: none; }
+.wiring .arrow { stroke: var(--w); stroke-width: 4px; stroke-linecap: butt; pointer-events: none; }
 .wiring .head { fill: var(--w); stroke: var(--page); stroke-width: 1px; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
 
 /* strip wiring or LED channels, on the labels page; on a phone it sits under the 2D/3D switch */
+/* touch sensors view */
+.t-m { --w: var(--t-m); }
+.t-3 { --w: var(--t-3); }
+.t-6 { --w: var(--t-6); }
+.t-9 { --w: var(--t-9); }
+.wiring .tw { stroke: var(--w); stroke-width: 2.4px; }
+.wiring .tdot { fill: var(--w); stroke: var(--page); stroke-width: 1px; pointer-events: none; }
+.wiring .tring { stroke: var(--w); stroke-width: 2px; }
+.wiring.touch .chev { stroke: var(--w); }
+
 .wiring-switch { position: absolute; top: 14px; left: 50%; translate: -50% 0; z-index: 3; background: var(--page); }
 .app:not([data-page="2"]) .wiring-switch { display: none; }
-.app[data-wview="channels"] [data-wview-only="wiring"],
-.app:not([data-wview="channels"]) [data-wview-only="channels"] { display: none; }
+.app:not([data-wview="channels"]) [data-wview-only="channels"],
+.app:not([data-wview="wiring"]) [data-wview-only="wiring"],
+.app:not([data-wview="touch"]) [data-wview-only="touch"],
+.app[data-wview="touch"] [data-wview-not="touch"] { display: none; }
 
 /* the wiring key in the notes card */
 .labels-key { width: 280px; }
 .labels-key .help { margin: 0; font-size: 0.95rem; line-height: 1.2; }
 .wkey { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 4px; margin-top: 4px; }
 .wkey .wires, .wkey .help { grid-column: 1 / -1; }
+.wkey.tkey { grid-template-columns: repeat(4, 1fr); }
 .wkey .chain { display: flex; align-items: center; gap: 8px; margin: 0; line-height: 1.5; cursor: default; border-radius: 4px; padding: 0 4px; }
 .wkey .chain:hover { background: color-mix(in srgb, var(--w) 14%, transparent); }
 .wkey .chain b { color: var(--w); font-family: var(--mono); font-size: 0.8rem; min-width: 2.2em; }

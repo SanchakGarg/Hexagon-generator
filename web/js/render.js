@@ -93,7 +93,7 @@ function wiringSvg(w, y) {
 
 // The LED channels view: one arrow along each channel from DIN to DOUT, in the colour of the chain that drives it.
 function arrowsSvg(arrows, lat, y) {
-  const head = lat.rho * 0.55;
+  const head = lat.rho * 1.1;
   const out = ['<g class="wiring chans">'];
   for (const a of arrows) {
     const base = { x: a.b.x - a.u.x * head, z: a.b.z - a.u.z * head };
@@ -109,8 +109,42 @@ function arrowsSvg(arrows, lat, y) {
   return out.join('');
 }
 
+// The touch sensors view: each node's sensor wire runs to the node that collects it, in that node's colour, with a
+// dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own.
+const groupClass = (g) => `t-${g.slice(1).toLowerCase()}`;
+function sensorsSvg(s, lat, y) {
+  const out = ['<g class="wiring touch">'];
+  for (const r of s.runs) {
+    const attrs = `data-chain="${r.group}" data-hex="${r.hexId}"`;
+    const route = [r.from, ...r.via, r.to].join(' → ');
+    const tip = `Touch sensor at ${r.from}\nwired ${route}`;
+    out.push(`<path class="hit" ${attrs} d="${line(r.points, y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="tw ${groupClass(r.group)}" ${attrs} d="${line(r.points, y)}"/>`);
+  }
+  const k = s.lane * 1.4;
+  for (const a of s.arrows) {
+    const ux = Math.cos(a.angle);
+    const uz = Math.sin(a.angle);
+    const pts = [
+      { x: a.x - ux * k - uz * k, z: a.z - uz * k + ux * k },
+      { x: a.x + ux * k * 0.4, z: a.z + uz * k * 0.4 },
+      { x: a.x - ux * k + uz * k, z: a.z - uz * k - ux * k },
+    ];
+    out.push(`<path class="chev ${groupClass(a.group)}" data-chain="${a.group}" data-hex="${a.hexId}" d="${line(pts, y)}"/>`);
+  }
+  for (const d of s.dots) {
+    out.push(`<circle class="tdot ${groupClass(d.group)}" data-chain="${d.group}" data-hex="${d.hexId}" cx="${fmt(d.x)}" cy="${fmt(y(d.z))}" r="${fmt(s.lane * 1.3)}"/>`);
+  }
+  for (const r of s.rings) {
+    const tip = `Touch sensor at ${r.node}\nwired straight into ${r.node}`;
+    out.push(`<circle class="tring ${groupClass(r.group)}" data-chain="${r.group}" data-hex="${r.hexId}" cx="${fmt(r.x)}" cy="${fmt(y(r.z))}" r="${fmt(lat.rho * 1.3)}" data-tip="${esc(tip)}"/>`);
+  }
+  out.push('</g>');
+  return out.join('');
+}
+
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, sensors = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -185,6 +219,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   // labels page: the LED wiring, under the node labels
   if (wiring) parts.push(wiringSvg(wiring, y));
   if (channelArrows) parts.push(arrowsSvg(channelArrows, lat, y));
+  if (sensors) parts.push(sensorsSvg(sensors, lat, y));
 
   // labels page: a tiny label at the centre of every node, the same set in each hexagon
   if (labels) {

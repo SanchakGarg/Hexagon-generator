@@ -1028,7 +1028,7 @@ export async function createViewer(container, geo) {
 
   // an arrow along each LED channel from DIN to DOUT: a thin rod and a cone at the DOUT end
   function arrowGeometries(a, y, r) {
-    const head = lattice.rho * 0.55;
+    const head = lattice.rho * 1.1;
     const dir = new THREE.Vector3(a.u.x, 0, a.u.z);
     const q = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir);
     const len = Math.hypot(a.b.x - a.a.x, a.b.z - a.a.z) - head;
@@ -1043,9 +1043,9 @@ export async function createViewer(container, geo) {
     });
   }
 
-  function setWiring(paths, arrows = null) {
+  function setWiring(paths, arrows = null, sensors = null) {
     clearWiring();
-    if ((!paths && !arrows) || !lattice) {
+    if ((!paths && !arrows && !sensors) || !lattice) {
       render();
       return;
     }
@@ -1063,11 +1063,18 @@ export async function createViewer(container, geo) {
       if (!groups.has(key)) groups.set(key, { cssVar, chain: key.split(':')[1], list: [] });
       groups.get(key).list.push(geometry);
     };
-    for (const a of arrows ?? []) for (const g of arrowGeometries(a, y, r * 1.6)) add(`arrow:${a.key}`, `--w-l${a.key}`, g);
-    for (const p of paths?.power ?? []) add(`${p.which}:${p.chain.slice(1)}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
+    for (const a of arrows ?? []) for (const g of arrowGeometries(a, y, r * 3.2)) add(`arrow:L${a.key}`, `--w-l${a.key}`, g);
+    // touch sensor wires, and a ring round each node that takes its own sensor
+    for (const t of sensors?.runs ?? []) add(`touch:${t.group}`, `--t-${t.group.slice(1).toLowerCase()}`, tube(t.points, y, r * 1.1, lift));
+    for (const ring of sensors?.rings ?? []) {
+      const torus = new THREE.TorusGeometry(lattice.rho * 1.3, r, 6, 32);
+      torus.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(ring.x, y, ring.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), ONE));
+      add(`touch:${ring.group}`, `--t-${ring.group.slice(1).toLowerCase()}`, torus);
+    }
+    for (const p of paths?.power ?? []) add(`${p.which}:${p.chain}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
     for (const sgl of paths?.signals ?? []) {
       const pieces = sgl.wire === 'FREE' ? dashes(sgl.points, lattice.rho * 0.35, lattice.rho * 0.22) : [sgl.points];
-      for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.key}`, `--w-l${sgl.key}`, tube(piece, y, r, lift));
+      for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.chain}`, `--w-l${sgl.key}`, tube(piece, y, r, lift));
     }
     for (const [key, g] of groups) {
       const material = toon({ color: cssColor(g.cssVar), transparent: true });
@@ -1083,7 +1090,7 @@ export async function createViewer(container, geo) {
   function focusWiring(id) {
     wireFocus = id;
     for (const mesh of wiringRoot.children) {
-      mesh.material.opacity = !id || `L${mesh.userData.chain}` === id ? 1 : 0.22;
+      mesh.material.opacity = !id || mesh.userData.chain === id ? 1 : 0.22;
       mesh.material.depthWrite = mesh.material.opacity === 1;
     }
     applyShow();

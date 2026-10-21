@@ -17,6 +17,10 @@ const BORROWED_SIDES = [60, 180, 300];
 // top, a–f for the corners clockwise from the top one (a shared corner takes the label from the hexagon that owns
 // it), and E1–E3 for the plate stack of an Edge on each side the hexagon borrows.
 const CORNER_LABELS = { 90: 'a', 30: 'b', 330: 'c', 270: 'd', 210: 'e', 150: 'f' };
+// A joining node is turned so its node-1 faces the node its touch sensor is wired to: the outer node of its owning
+// hexagon between it and the next corner (a, f → 9 at 120°; b, c → 3 at 0°; d, e → 6 at 240°).
+const FACING_FRAME = 'node-1';
+const HUB_OF_CORNER = { 90: 120, 150: 120, 30: 0, 330: 0, 270: 240, 210: 240 };
 const EDGE_LABELS = { 60: 'E1', 180: 'E2', 300: 'E3' };
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -194,12 +198,18 @@ export function buildNodes(hexes, lat) {
     }
   }
 
-  // The hexagon with an Edge here turns the node, so edge-1 meets node-1 running along its side; at most one hexagon
-  // per node has one. Otherwise the first in TURN_ORDER does. That hexagon owns the node, however many it joins.
+  // The hexagon with an Edge here owns the node; at most one hexagon per node has one. Otherwise the first in
+  // TURN_ORDER does, however many it joins. The owner names the node and turns it so node-1 faces the outer node its
+  // touch sensor is wired to.
+  const hexById = new Map(hexes.map((h) => [h.id, h]));
+  const mid = (lat.R * Math.sqrt(3)) / 2;
   for (const node of byKey.values()) {
     const rank = (j) => (j.edge ? -1 : TURN_ORDER.indexOf(j.hexFrame));
     const lead = node.joints.reduce((a, b) => (rank(b) < rank(a) ? b : a));
-    node.rotation = lat.turnFor[lead.hexFrame];
+    const owner = hexById.get(lead.hexId);
+    const hub = rad(HUB_OF_CORNER[lat.cornerOf[lead.hexFrame]]);
+    const facing = deg(Math.atan2(owner.z + mid * Math.sin(hub) - node.z, owner.x + mid * Math.cos(hub) - node.x));
+    node.rotation = norm(facing - lat.nodeAngles[FACING_FRAME]);
     node.hexId = lead.hexId;
     for (const j of node.joints) {
       j.nodeFrame = nearestFrame(lat.nodeAngles, node.rotation, lat.frameOffset[j.hexFrame]);
