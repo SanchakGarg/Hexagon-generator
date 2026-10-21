@@ -101,7 +101,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   </g>`);
 
   for (const h of excluded) {
-    const tip = `${h.id} · row ${h.row}, col ${h.col}\nexcluded · click to restore`;
+    const tip = `${h.id} · row ${h.row}, col ${h.col}\nExcluded · click to restore`;
     parts.push(`<g class="hex ghost" data-ghost="${h.id}" data-tip="${esc(tip)}">
       <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>${sketch(h.x, y(h.z), lat.R, h.id)}
       <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>

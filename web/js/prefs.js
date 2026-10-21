@@ -54,13 +54,16 @@ export function initSections() {
   }
 }
 
-// Named designs, newest first. Each one holds the inputs as typed, in the unit they were typed in.
+// Named designs, newest first. Each one holds the inputs as typed, in the unit they were typed in, and an id that
+// survives renaming; saves from before ids existed are known by their name.
 const SAVES_KEY = 'hexwall-saves';
 
 export function loadSaves() {
   try {
     const list = JSON.parse(read(SAVES_KEY) ?? '[]');
-    return Array.isArray(list) ? list.filter((s) => s && typeof s.name === 'string' && s.config) : [];
+    return Array.isArray(list)
+      ? list.filter((s) => s && typeof s.name === 'string' && s.config).map((s) => ({ ...s, id: s.id ?? `name:${s.name}` }))
+      : [];
   } catch {
     return [];
   }

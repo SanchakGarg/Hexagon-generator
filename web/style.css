@@ -17,6 +17,8 @@
   --butter: #fbe9a6;
   --rose: #f7c6d0;
   --accent: #d8577a; /* ink-strength rose, for warnings and the selection outline */
+  --ok: #2e9a5c; /* saved tick */
+  --bad: #e5484d; /* never-saved dot */
 
   /* part colours, shared by the drawing, the keys and the 3D view */
   --c-hex: #a9dcc6;
@@ -53,6 +55,8 @@
   --butter: #e3d08f;
   --rose: #e0a9b6;
   --accent: #f08aa6;
+  --ok: #6fd49a;
+  --bad: #ff6b6b;
 
   --c-hex: #8fc6af;
   --c-mcu: #c98ad6;
@@ -472,6 +476,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   min-width: 0;
   min-height: 0;
   display: flex;
+  flex-direction: column;
   padding-left: 18px;
 }
 
@@ -480,7 +485,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   position: absolute;
   z-index: 2;
   left: 0;
-  top: 22px;
+  top: 62px; /* below the tab strip */
   bottom: 22px;
   width: 36px;
   background: var(--ink);
@@ -490,6 +495,193 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   mask: var(--coil) 0 0 / 36px 34px repeat-y;
   pointer-events: none;
 }
+
+/* tabs along the top of the page, one per open design, like a browser's; the open one joins the page below */
+.tabs {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 40px;
+  padding-left: 30px;
+  min-width: 0;
+}
+
+.tab-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-top: 4px;
+}
+
+.tab {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 34px;
+  padding: 0 6px 0 14px;
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--page) 55%, var(--line));
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, color 0.2s, height 0.2s;
+}
+
+.tab:hover { color: var(--ink); background: color-mix(in srgb, var(--page) 80%, var(--line)); }
+
+/* the open tab stands taller and in the page's colour, covering the page's top border so the two read as one */
+.tab[aria-selected="true"] {
+  z-index: 4;
+  height: 38px;
+  margin-bottom: -2px;
+  padding-bottom: 2px;
+  background: var(--page);
+  color: var(--ink);
+  cursor: default;
+}
+
+.tab:focus-visible { outline: 2px dashed var(--accent); outline-offset: -5px; }
+
+.tab-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tab-rename {
+  min-width: 0;
+  max-width: 170px;
+  border: 0;
+  border-bottom: 2px solid var(--accent);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0;
+  outline: none;
+}
+
+/* saved: a green tick; changed since saving: a grey clock; never saved: a red dot */
+.tab-state {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+}
+
+.tab-state svg { width: 12px; height: 12px; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tab-state[data-state="saved"] svg { stroke: var(--ok); stroke-width: 2.2; }
+.tab-state[data-state="pending"] svg { stroke: var(--muted); }
+.tab-state[data-state="unsaved"]::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+
+.tab-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font: 1.15rem/1 var(--hand);
+  cursor: pointer;
+  padding: 0;
+}
+
+.tab-close:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+
+.tab-add { position: relative; flex: none; padding-bottom: 6px; }
+
+.tab-plus {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--butter);
+  color: #2a2a3c;
+  font: 1.4rem/1 var(--hand);
+  padding: 0 0 2px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-plus:hover { transform: rotate(90deg); }
+.tab-plus[aria-expanded="true"] { transform: rotate(45deg); }
+.tab-plus:focus-visible { outline: 2px dashed var(--accent); outline-offset: 3px; }
+
+.tab-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  padding: 12px 10px 8px;
+  rotate: 0deg;
+  --tape: var(--butter);
+  box-shadow: 4px 6px 0 var(--shadow);
+  animation: note-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: 1.15rem var(--hand);
+  text-align: left;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible { background: color-mix(in srgb, var(--sky) 45%, transparent); outline: none; }
+#menu-new::before { content: "+ "; color: var(--accent); }
+
+.menu-head {
+  margin: 8px 8px 2px;
+  padding-top: 8px;
+  border-top: 1.5px dashed var(--line);
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.tab-menu .saves { max-height: 40vh; }
+.tab-menu .saves li { gap: 4px; padding-block: 0; border: 0; }
+.tab-menu .saves:empty::before { display: block; padding: 2px 8px 4px; }
+.tab-menu .saves b { font-size: 1.15rem; }
+.tab-menu .saves small { display: block; font-size: 0.85rem; }
+
+.menu-del {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font: 1.15rem/1 var(--hand);
+  cursor: pointer;
+}
+
+.menu-del:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
 
 .viewport {
   flex: 1;
@@ -713,10 +905,11 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 .hex-card dl { margin: 0; display: grid; gap: 1px; }
 .hex-card dl > div { display: flex; justify-content: space-between; gap: 16px; }
+.hex-card dl > div { align-items: baseline; font-size: 1.15rem; }
 .hex-card dt { color: #5d5a70; }
-.hex-card dd { margin: 0; font: 600 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
+.hex-card dd { margin: 0; color: #c0406a; font-variant-numeric: tabular-nums; }
 
-/* running totals: one more index card, pinned to the page's bottom-right corner, written on ruled lines */
+/* running totals: one more index card, pinned to the page's bottom-right corner, written like a note */
 .card.totals {
   position: absolute;
   right: 18px;
@@ -736,11 +929,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .app[data-page="2"] [data-page-only="1"] { display: none; }
 
 .card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
-.bom { min-width: 240px; margin-top: 4px; }
-.bom li { font-size: 1.05rem; line-height: 1.15; padding-block: 3px; }
-.bom b { font-size: 1.25rem; }
-.bom small { display: block; padding-left: 2px; font-size: 0.85rem; color: var(--muted); }
-.tally li { font-size: 1.25rem; }
+.bom { min-width: 250px; margin-top: 4px; }
+.bom .line { font-size: 1.1rem; line-height: 1.2; padding-block: 4px 3px; }
 
 /* --- footer: saves on the left, pages on the right --------------------------- */
 
@@ -756,7 +946,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 .footer-saves,
 .footer-pages { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.footer .count { margin-left: 4px; }
 .status { color: var(--muted); font-size: 1.05rem; }
 .page-count { color: var(--muted); font-size: 1.15rem; }
 
@@ -808,26 +997,29 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .saves small { color: var(--muted); font-size: 0.95rem; }
 .saves .btn { font-size: 1rem; padding: 1px 10px; }
 
-.ruled {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-}
+/* note lines: what it is, a gap, then how many at the end of the line in the same hand, inked in rose */
+.lines { margin: 8px 0 0; }
 
-.ruled li {
-  font-size: 1.2rem;
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0;
+  font-size: 1.25rem;
   line-height: 30px;
   border-bottom: 1.5px solid var(--rule);
-  padding-left: 2px;
+  padding-inline: 2px;
 }
 
-.ruled b {
+.line b {
   font-weight: 400;
-  font-size: 1.55rem;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
-  margin-right: 2px;
+  white-space: nowrap;
 }
+
+.line small { display: block; font-size: 0.82rem; line-height: 1.2; color: var(--muted); }
 
 /* on/off switch: a pill with a knob that slides across */
 .switch {
@@ -899,8 +1091,9 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .hint { display: none; }
   .pick-bar { left: 24px; bottom: auto; top: 56px; max-width: calc(100% - 40px); }
   .card.totals { right: 10px; bottom: 10px; min-width: 0; padding: 8px 12px 6px; }
-  .ruled li { font-size: 1.05rem; line-height: 24px; }
-  .ruled b { font-size: 1.25rem; }
+  .line { font-size: 1.05rem; line-height: 24px; }
+  .stage::before { top: 50px; }
+  .tabs { padding-left: 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

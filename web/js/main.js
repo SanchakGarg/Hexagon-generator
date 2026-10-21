@@ -6,11 +6,11 @@ import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
-  '2d': 'hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
-  '3d': 'hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
-  parts: 'click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
+  '2d': 'Hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
+  '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
+  parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
-const PAGES = ['configure', 'parts list'];
+const PAGES = ['Configure', 'Parts list'];
 // LED strip: each channel holds 15 LEDs, the strip has 60 per metre and comes in 5 m rolls
 const LEDS_PER_CHANNEL = 15;
 const LEDS_PER_M = 60;
@@ -46,7 +46,6 @@ let view = '2d';
 let viewer = null;
 let boardOn = true;
 let page = 1;
-let savedName = '';
 
 // hexagons are tracked by grid position, so a selection survives small wall edits
 const keyOf = (h) => `${h.row}:${h.col}`;
@@ -94,8 +93,8 @@ function renderPicks() {
   $('excluded-count').textContent = exc;
   $('selected-label').textContent = parts ? `node${sel === 1 ? '' : 's'} picked` : 'selected';
   $('excluded-label').textContent = parts ? 'without touch sensor' : 'excluded';
-  excludeBtn.textContent = parts ? 'no touch sensor' : 'exclude';
-  restoreBtn.textContent = parts ? 'add sensors back' : 'restore all';
+  excludeBtn.textContent = parts ? 'No touch sensor' : 'Exclude';
+  restoreBtn.textContent = parts ? 'Add sensors back' : 'Restore all';
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
   pickBar.hidden = sel === 0 && exc === 0;
@@ -110,35 +109,40 @@ function renderBom(s, hexes, edges, rim) {
   const metres = pixels / LEDS_PER_M;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   const rows = [
-    [hexes.length, 'hexagon panels'],
+    [hexes.length, 'Hexagon panels'],
     [edges.length, 'Edge pieces'],
-    [s.counts.edge, 'edge nodes'],
+    [s.counts.edge, 'Edge nodes'],
     [s.counts['2way'], '2-way nodes'],
     [s.counts['3way'], '3-way nodes'],
-    [s.counts.nodes - skipped, 'touch sensors', skipped ? `1 per node, ${skipped} left out` : '1 per node'],
+    [s.counts.nodes - skipped, 'Touch sensors', skipped ? `1 per node, ${skipped} left out` : '1 per node'],
     [Math.ceil(pixels / (LEDS_PER_M * ROLL_M)), `LED strip rolls (${ROLL_M} m)`, `${pixels} LEDs · ${+metres.toFixed(2)} m at ${LEDS_PER_M}/m`],
     [hexes.length, 'ESP32 Ethernet boards', '1 per hexagon · WT32-ETH01 works'],
   ];
-  if (boardOn && rim.length) rows.push([1, 'backboard', `${formatLength(span('x'))} × ${formatLength(span('z'))}`]);
+  if (boardOn && rim.length) rows.push([1, 'Backboard', `${formatLength(span('x'))} × ${formatLength(span('z'))}`]);
+  // written like a note: what, then how many at the end of the line, with any working in small print beneath
   $('bom').replaceChildren(
     ...rows
       .filter(([n]) => n > 0)
       .map(([n, label, note]) => {
-        const li = document.createElement('li');
-        const b = document.createElement('b');
-        b.textContent = n;
-        li.append(b, ` ${label}`);
+        const line = document.createElement('p');
+        line.className = 'line';
+        const what = document.createElement('span');
+        what.textContent = label;
         if (note) {
           const small = document.createElement('small');
           small.textContent = note;
-          li.append(small);
+          what.append(small);
         }
-        return li;
+        const b = document.createElement('b');
+        b.textContent = n;
+        line.append(what, b);
+        return line;
       }),
   );
 }
 
 function update() {
+  refreshTabStates();
   const scale = UNITS[unit];
   const W = parseFloat(widthIn.value) * scale;
   const H = parseFloat(heightIn.value) * scale;
@@ -194,7 +198,7 @@ function update() {
   // the board follows the outline, grown so the node bodies sit on it
   const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
-  $('board-size').textContent = boardOn && rim.length ? `board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
+  $('board-size').textContent = boardOn && rim.length ? `Board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
   renderBom(s, hexes, edges, rim);
 
   if (gridHexes.length === 0) {
@@ -244,7 +248,7 @@ function showHexCard(id) {
   const { nodes, edges, lat } = lastLayout;
   const own = edges.filter((e) => e.hexId === id).length;
   const rows = [
-    ['nodes', lat.perHex.nodes + own * lat.perEdge.nodes + nodes.filter((n) => n.hexId === id).length],
+    ['Nodes', lat.perHex.nodes + own * lat.perEdge.nodes + nodes.filter((n) => n.hexId === id).length],
     ['LEDs', lat.perHex.leds + own * lat.perEdge.leds],
   ];
   const title = document.createElement('p');
@@ -370,6 +374,7 @@ function applyLayers() {
   }
   for (const l of LAYERS) svg.classList.toggle(`hide-${l}`, !show[l]);
   viewer?.setShow(show);
+  refreshTabStates();
 }
 
 for (const b of layerButtons) {
@@ -417,25 +422,28 @@ const nextBtn = $('next-btn');
 function setPage(next) {
   page = next;
   app.dataset.page = String(page);
-  $('page-count').textContent = `page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
+  $('page-count').textContent = `Page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
   backBtn.hidden = page === 1;
   nextBtn.hidden = page === PAGES.length;
   // each page picks its own things
   selected.clear();
   nodePicks.clear();
   hover(null);
-  hint.textContent = page === 2 ? HINTS.parts : HINTS[view];
+  // until the meshes are in, the hint says they are loading
+  if (viewer) hint.textContent = page === 2 ? HINTS.parts : HINTS[view];
   if (lattice) update();
 }
 backBtn.addEventListener('click', () => setPage(page - 1));
 nextBtn.addEventListener('click', () => setPage(page + 1));
 
-// --- saves: named designs kept in this browser ------------------------------
+// --- tabs: each one an open design, like browser tabs; saves keep them in this browser -------
 
 const saveDialog = $('save-dialog');
-const openDialog = $('open-dialog');
 const saveName = $('save-name');
 const saveError = $('save-error');
+const tabList = $('tab-list');
+const tabPlus = $('tab-plus');
+const tabMenu = $('tab-menu');
 let statusTimer = 0;
 
 function status(text) {
@@ -478,13 +486,225 @@ function restore(c) {
   if (lattice) update();
 }
 
-const savesCount = () => ($('saves-count').textContent = loadSaves().length);
+// A tab holds its design while another is on screen. saveId links it to a save; savedName and savedConfig are
+// that save as stored, so the tab can tell saved (green tick) from changed since (grey clock). A tab never saved
+// shows a red dot.
+const tabs = [];
+let active = null;
+let tabSeq = 0;
+let fresh = ''; // a new design as the page first loads, to tell an untouched tab from an edited one
+const tabEls = new Map();
 
-$('save-btn').addEventListener('click', () => {
-  saveName.value = savedName;
-  saveError.textContent = '';
+const configOf = (t) => JSON.stringify(t === active ? snapshot() : t.config);
+
+function tabState(t) {
+  if (!t.saveId) return 'unsaved';
+  return configOf(t) === t.savedConfig && t.name === t.savedName ? 'saved' : 'pending';
+}
+
+// worth a warning before the tab goes: edited since its last save, or since it opened if never saved
+const hasChanges = (t) => (t.saveId ? tabState(t) === 'pending' : configOf(t) !== fresh);
+
+// new tabs are Untitled, Untitled 2, Untitled 3… taking the lowest number not open
+function untitled() {
+  const names = new Set(tabs.map((t) => t.name));
+  let n = 1;
+  while (names.has(n === 1 ? 'Untitled' : `Untitled ${n}`)) n++;
+  return n === 1 ? 'Untitled' : `Untitled ${n}`;
+}
+
+const STATES = {
+  saved: ['Saved', '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 6.4 4.9 9 9.8 3.2"/></svg>'],
+  pending: ['Changes not saved yet', '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.6"/><path d="M6 3.5V6l1.7 1.2"/></svg>'],
+  unsaved: ['Not saved', ''],
+};
+
+function refreshTabStates() {
+  for (const t of tabs) {
+    const el = tabEls.get(t.id)?.querySelector('.tab-state');
+    const state = tabState(t);
+    if (!el || el.dataset.state === state) continue;
+    el.dataset.state = state;
+    el.title = STATES[state][0];
+    el.setAttribute('aria-label', STATES[state][0]);
+    el.innerHTML = STATES[state][1];
+  }
+}
+
+// tabs are kept and updated in place rather than redrawn, so a double-click lands on the same element twice
+function renderTabs() {
+  for (const [id, el] of tabEls) {
+    if (!tabs.some((t) => t.id === id)) {
+      el.remove();
+      tabEls.delete(id);
+    }
+  }
+  for (const t of tabs) {
+    let el = tabEls.get(t.id);
+    if (!el) {
+      el = tabElement(t);
+      tabEls.set(t.id, el);
+    }
+    const on = t === active;
+    el.setAttribute('aria-selected', String(on));
+    el.tabIndex = on ? 0 : -1;
+    const name = el.querySelector('.tab-name');
+    if (name) name.textContent = t.name;
+    el.title = t.name;
+    el.querySelector('.tab-close').setAttribute('aria-label', `Close ${t.name}`);
+    tabList.append(el);
+  }
+  tabList.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  refreshTabStates();
+}
+
+function tabElement(t) {
+  const el = document.createElement('div');
+  el.className = 'tab';
+  el.setAttribute('role', 'tab');
+  const name = document.createElement('span');
+  name.className = 'tab-name';
+  const state = document.createElement('span');
+  state.className = 'tab-state';
+  state.setAttribute('role', 'img');
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'tab-close';
+  close.tabIndex = -1;
+  close.textContent = '×';
+  el.append(name, state, close);
+  el.addEventListener('click', () => activate(t));
+  el.addEventListener('dblclick', (e) => {
+    if (!e.target.closest('.tab-close')) rename(t);
+  });
+  // a middle click closes, as in a browser
+  el.addEventListener('auxclick', (e) => e.button === 1 && closeTab(t));
+  el.addEventListener('keydown', (e) => {
+    if (e.target !== el) return;
+    if (e.key === 'F2' || e.key === 'Enter') {
+      e.preventDefault();
+      rename(t);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const next = tabs[(tabs.indexOf(t) + (e.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length];
+      activate(next);
+      tabEls.get(next.id)?.focus();
+    } else if (e.key === 'Delete') {
+      closeTab(t);
+    }
+  });
+  close.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTab(t);
+  });
+  return el;
+}
+
+function activate(t) {
+  if (t === active) return;
+  if (active) {
+    active.config = snapshot();
+    active.page = page;
+  }
+  active = t;
+  restore(t.config);
+  setPage(t.page);
+  renderTabs();
+}
+
+function openTab({ name = untitled(), config = JSON.parse(fresh), save = null } = {}) {
+  const t = { id: ++tabSeq, name, config, page: 1, saveId: save?.id ?? null, savedName: save?.name ?? null, savedConfig: null };
+  tabs.push(t);
+  activate(t);
+  // read back what the inputs hold, so a just-opened save compares as unchanged
+  if (save) t.savedConfig = configOf(t);
+  refreshTabStates();
+  return t;
+}
+
+function closeTab(t) {
+  if (hasChanges(t) && !confirm(`Close “${t.name}” without saving? Its changes will be lost.`)) return;
+  const i = tabs.indexOf(t);
+  tabs.splice(i, 1);
+  if (t === active) {
+    active = null;
+    if (tabs.length) activate(tabs[Math.min(i, tabs.length - 1)]);
+    else openTab();
+  }
+  renderTabs();
+}
+
+// the name is edited in place; Enter or clicking away keeps it, Escape or an empty name puts the old one back
+function rename(t) {
+  activate(t);
+  const el = tabEls.get(t.id);
+  const name = el?.querySelector('.tab-name');
+  if (!name) return;
+  const input = document.createElement('input');
+  input.className = 'tab-rename';
+  input.value = t.name;
+  input.maxLength = 60;
+  input.setAttribute('aria-label', 'Tab name');
+  input.size = Math.max(4, t.name.length);
+  name.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (keep) => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    if (keep && v) t.name = v;
+    input.replaceWith(name);
+    renderTabs();
+    el.focus();
+  };
+  input.addEventListener('input', () => (input.size = Math.max(4, input.value.length)));
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') finish(true);
+    else if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+  for (const type of ['click', 'dblclick', 'auxclick']) input.addEventListener(type, (e) => e.stopPropagation());
+}
+
+// stores the tab on screen under a name; returns why it could not, or '' once saved
+function saveAs(name) {
+  const t = active;
+  const saves = loadSaves();
+  if (saves.some((x) => x.name === name && x.id !== t.saveId)) return `There's already a save called “${name}”. Pick another name.`;
+  const id = t.saveId ?? `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const config = snapshot();
+  if (!storeSaves([{ id, name, savedAt: Date.now(), config }, ...saves.filter((x) => x.id !== id)])) {
+    return 'This browser would not store it (private window or storage blocked).';
+  }
+  Object.assign(t, { name, saveId: id, savedName: name, savedConfig: JSON.stringify(config) });
+  renderTabs();
+  status(`Saved “${name}”`);
+  return '';
+}
+
+function askName(error = '') {
+  saveName.value = active.name;
+  saveError.textContent = error;
   saveDialog.showModal();
   saveName.select();
+}
+
+// a tab saved before saves straight away under its tab name; a first save asks for the name to keep
+function save() {
+  if (saveDialog.open) return;
+  if (!active.saveId) return askName();
+  const error = saveAs(active.name);
+  if (error) askName(error);
+}
+
+$('save-btn').addEventListener('click', save);
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    save();
+  }
 });
 
 $('save-form').addEventListener('submit', (e) => {
@@ -495,69 +715,92 @@ $('save-form').addEventListener('submit', (e) => {
     saveName.focus();
     return;
   }
-  const saves = loadSaves();
-  const replaced = saves.some((x) => x.name === name);
-  const next = [{ name, savedAt: Date.now(), config: snapshot() }, ...saves.filter((x) => x.name !== name)];
-  if (!storeSaves(next)) {
-    saveError.textContent = 'This browser would not store it (private window or storage blocked).';
-    return;
+  const error = saveAs(name);
+  if (error) {
+    saveError.textContent = error;
+    saveName.focus();
+  } else {
+    saveDialog.close();
   }
-  savedName = name;
-  saveDialog.close();
-  savesCount();
-  status(`${replaced ? 'replaced' : 'saved'} “${name}”`);
 });
 
-function renderSaves() {
-  const list = $('saves-list');
-  list.replaceChildren(
-    ...loadSaves().map((save) => {
+for (const b of saveDialog.querySelectorAll('[data-close]')) b.addEventListener('click', () => saveDialog.close());
+// a click on the backdrop lands on the dialog itself
+saveDialog.addEventListener('click', (e) => e.target === saveDialog && saveDialog.close());
+
+// the + menu: a fresh tab, or any saved design (switching to it if it is already open)
+function renderMenu() {
+  $('saves-list').replaceChildren(
+    ...loadSaves().map((s) => {
       const li = document.createElement('li');
-      const text = document.createElement('div');
-      const name = document.createElement('b');
-      name.textContent = save.name;
-      const meta = document.createElement('small');
-      const c = save.config;
-      meta.textContent = `${c.width} × ${c.height} ${c.unit} · ${new Date(save.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
-      text.append(name, meta);
       const open = document.createElement('button');
       open.type = 'button';
-      open.className = 'btn';
-      open.textContent = 'open';
+      open.className = 'menu-item';
+      open.setAttribute('role', 'menuitem');
+      const name = document.createElement('b');
+      name.textContent = s.name;
+      const meta = document.createElement('small');
+      const c = s.config;
+      meta.textContent = `${c.width} × ${c.height} ${c.unit} · ${new Date(s.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+      open.append(name, meta);
       open.addEventListener('click', () => {
-        savedName = save.name;
-        restore(c);
-        openDialog.close();
-        status(`opened “${save.name}”`);
+        closeMenu();
+        const already = tabs.find((t) => t.saveId === s.id);
+        if (already) activate(already);
+        else openTab({ name: s.name, config: s.config, save: s });
+        status(`Opened “${s.name}”`);
       });
       const del = document.createElement('button');
       del.type = 'button';
-      del.className = 'btn';
-      del.textContent = 'delete';
-      del.setAttribute('aria-label', `Delete ${save.name}`);
+      del.className = 'menu-del';
+      del.textContent = '×';
+      del.title = 'Delete this save';
+      del.setAttribute('aria-label', `Delete ${s.name}`);
       del.addEventListener('click', () => {
-        if (!confirm(`Delete “${save.name}”? This can't be undone.`)) return;
-        storeSaves(loadSaves().filter((x) => x.name !== save.name));
-        renderSaves();
-        savesCount();
+        if (!confirm(`Delete the save “${s.name}”? This can't be undone.`)) return;
+        storeSaves(loadSaves().filter((x) => x.id !== s.id));
+        // an open tab of it stays, now unsaved
+        for (const t of tabs) if (t.saveId === s.id) Object.assign(t, { saveId: null, savedName: null, savedConfig: null });
+        refreshTabStates();
+        renderMenu();
       });
-      li.append(text, open, del);
+      li.append(open, del);
       return li;
     }),
   );
 }
 
-$('open-btn').addEventListener('click', () => {
-  renderSaves();
-  openDialog.showModal();
+function closeMenu() {
+  tabMenu.hidden = true;
+  tabPlus.setAttribute('aria-expanded', 'false');
+}
+
+tabPlus.addEventListener('click', () => {
+  if (!tabMenu.hidden) return closeMenu();
+  renderMenu();
+  tabMenu.hidden = false;
+  tabPlus.setAttribute('aria-expanded', 'true');
+  $('menu-new').focus();
+});
+$('menu-new').addEventListener('click', () => {
+  closeMenu();
+  openTab();
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!tabMenu.hidden && !e.target.closest('.tab-add')) closeMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !tabMenu.hidden) {
+    closeMenu();
+    tabPlus.focus();
+  }
+});
+window.addEventListener('beforeunload', (e) => {
+  if (tabs.some(hasChanges)) e.preventDefault();
 });
 
-for (const dialog of [saveDialog, openDialog]) {
-  for (const b of dialog.querySelectorAll('[data-close]')) b.addEventListener('click', () => dialog.close());
-  // a click on the backdrop lands on the dialog itself
-  dialog.addEventListener('click', (e) => e.target === dialog && dialog.close());
-}
-savesCount();
+fresh = JSON.stringify(snapshot());
+openTab();
 
 btn2d.addEventListener('click', () => setView('2d'));
 btn3d.addEventListener('click', () => setView('3d'));
