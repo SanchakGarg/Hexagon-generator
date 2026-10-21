@@ -73,9 +73,9 @@ export const channelName = (c) => `${nm(c.in)}→${nm(c.out)}`;
 export const chainPath = (chain) =>
   chain.hops.map((hop, i) => (i === 0 ? nm(hop.from) : '') + (hop.wire === 'FREE' ? ' ⇢ ' : '→') + nm(hop.to)).join('');
 
-// One arrow per LED channel, from its DIN end to its DOUT end, stopping at the node bodies; for the LED channels view.
+// One small arrow per LED channel, centred on it and pointing from its DIN end to its DOUT end; for the LED channels view.
 export function channelArrows({ channels }, lat) {
-  const trim = lat.rho * 1.05;
+  const half = lat.rho * 0.9;
   return channels.map((c) => {
     const dx = c.out.x - c.in.x;
     const dz = c.out.z - c.in.z;
@@ -88,8 +88,13 @@ export function channelArrows({ channels }, lat) {
       channel: channelName(c),
       din: nm(c.in),
       dout: nm(c.out),
-      a: { x: c.in.x + u.x * trim, z: c.in.z + u.z * trim },
-      b: { x: c.out.x - u.x * trim, z: c.out.z - u.z * trim },
+      a: { x: (c.in.x + c.out.x) / 2 - u.x * half, z: (c.in.z + c.out.z) / 2 - u.z * half },
+      b: { x: (c.in.x + c.out.x) / 2 + u.x * half, z: (c.in.z + c.out.z) / 2 + u.z * half },
+      // the whole channel between the node bodies, for hovering
+      span: [
+        { x: c.in.x + u.x * lat.rho, z: c.in.z + u.z * lat.rho },
+        { x: c.out.x - u.x * lat.rho, z: c.out.z - u.z * lat.rho },
+      ],
       u,
     };
   });

@@ -101,7 +101,7 @@ function arrowsSvg(arrows, lat, y) {
     const tri = [a.b, { x: base.x + n.x, z: base.z + n.z }, { x: base.x - n.x, z: base.z - n.z }];
     const attrs = `data-chain="${a.chain}" data-hex="${a.hexId}"`;
     const tip = `Channel ${a.channel} · ${a.chain}\nDIN @ ${a.din} → DOUT @ ${a.dout}`;
-    out.push(`<path class="hit" ${attrs} d="${line([a.a, a.b], y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="hit" ${attrs} d="${line(a.span, y)}" data-tip="${esc(tip)}"/>`);
     out.push(`<path class="arrow w-${a.key}" ${attrs} d="${line([a.a, base], y)}"/>`);
     out.push(`<polygon class="head w-${a.key}" ${attrs} points="${tri.map((p) => `${fmt(p.x)},${fmt(y(p.z))}`).join(' ')}"/>`);
   }
