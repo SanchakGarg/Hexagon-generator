@@ -26,6 +26,7 @@ const PRICE = {
   channel: 50, // 2 m LED channel
   strip: 1365, // 5 m WS2812B roll
   filament: 1349, // 1 kg roll
+  touch: 19, // pair of touch sensors
   esp: 792, // ESP32-ETH01
   psu: 1115, // 5 V 10 A power supply
   drywall: 1.4,
@@ -152,7 +153,7 @@ function renderBom(s, hexes, rim) {
         { label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node` },
         { label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart' },
         { label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon' },
-        { label: 'Touch sensors', qty: nodes - skipped, rate: null, note: skipped ? `1 per node, ${skipped} left out` : '1 per node' },
+        { label: 'Touch sensors (pair)', qty: Math.ceil((nodes - skipped) / 2), rate: PRICE.touch, note: `${nodes - skipped} sensors · 1 per node${skipped ? `, ${skipped} left out` : ''}` },
       ],
     },
     {
