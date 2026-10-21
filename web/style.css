@@ -20,7 +20,7 @@
 
   /* part colours, shared by the drawing, the keys and the 3D view */
   --c-hex: #a9dcc6;
-  --c-led: #ffd77a;
+  --c-led: #4a4560; /* dark channels read against the pale board */
   --c-3way: #93cdee;
   --c-2way: #bba8ef;
   --c-edge: #f8ae8e;
@@ -54,12 +54,12 @@
   --accent: #f08aa6;
 
   --c-hex: #8fc6af;
-  --c-led: #f2cf6b;
+  --c-led: #f0b440;
   --c-3way: #7fb7d6;
   --c-2way: #a595d9;
   --c-edge: #e39a7e;
   --c-select: #f08aa6;
-  --c-board: #4a4b66;
+  --c-board: #ebe7f1; /* the board stays pale at night, so the build reads on it */
   --c-outline: #15162a;
   --hl: 34%;
   color-scheme: dark;
@@ -201,10 +201,8 @@ h1 {
 }
 
 .card[data-section="configure"] { --tape: var(--sky); }
+.card[data-section="backboard"] { --tape: var(--butter); }
 .card[data-section="show"] { --tape: var(--mint); }
-.card[data-section="hexagons"] { --tape: var(--rose); }
-.card[data-section="parts"] { --tape: var(--butter); }
-.card[data-section="lattice"] { --tape: var(--lilac); }
 
 summary {
   display: flex;
@@ -213,7 +211,10 @@ summary {
   cursor: pointer;
   list-style: none;
   padding-block: 2px;
+  gap: 10px;
 }
+
+summary .switch { margin-left: auto; }
 
 summary::-webkit-details-marker { display: none; }
 
@@ -311,15 +312,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   font-size: 1.05rem;
 }
 
-.list-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 2px 0 0;
-  font-size: 1.2rem;
-  font-weight: 400;
-}
-
 .count {
   min-width: 24px;
   text-align: center;
@@ -330,58 +322,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   border-radius: 10px;
   padding: 0 6px;
 }
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-height: 28px;
-}
-
-.chips:empty::before {
-  content: attr(data-empty);
-  color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 28px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 1.5px solid var(--ink);
-  border-radius: 14px;
-  padding: 1px 3px 1px 10px;
-  font-size: 1.05rem;
-  background: var(--rose);
-  color: #2a2a3c;
-  animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-#excluded-list .chip { background: transparent; color: var(--muted); border-style: dashed; border-color: var(--muted); }
-
-@keyframes pop-in {
-  from { scale: 0.4; opacity: 0; }
-}
-
-.chip button {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  font: 600 14px var(--mono);
-  cursor: pointer;
-}
-
-.chip button:hover { background: rgba(59, 58, 74, 0.12); }
-.chip button:focus-visible { outline: 2px dashed var(--accent); }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -428,11 +368,29 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .seg button:disabled { opacity: 0.4; cursor: default; }
 .seg button:focus-visible { outline: 2px dashed var(--accent); outline-offset: -4px; }
 
-/* layer toggles read like a ticked checklist */
+/* layer toggles read like a ticked checklist; each group's kinds hang off it on a pencil line */
 .toggles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggles .sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 6px 8px;
+  padding-left: 14px;
+  border-left: 2px dotted var(--line);
+}
+
+.toggles .sub button { font-size: 1.02rem; }
+
+.toggles .n {
+  margin-left: auto;
+  font: 600 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 .toggles button {
@@ -465,6 +423,13 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
     var(--page);
 }
 
+.toggles button[aria-pressed="mixed"]::before {
+  background:
+    no-repeat center / 14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5h9' fill='none' stroke='%23d8577a' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E"),
+    var(--page);
+}
+
+.toggles button { width: 100%; }
 .toggles button[aria-pressed="false"] { color: var(--muted); }
 .toggles button[aria-pressed="false"] .key { opacity: 0.35; }
 .toggles button:focus-visible { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 4px; }
@@ -481,47 +446,11 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .key-3way { background: var(--c-3way); }
 .key-2way { background: var(--c-2way); }
 .key-edge { background: var(--c-edge); }
-.key-strut { width: 16px; height: 6px; background: var(--c-hex); }
-.key-hex { width: 13px; height: 13px; border: 0; background: var(--ink); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); position: relative; }
-.key-hex::after { content: ""; position: absolute; inset: 1.6px; background: var(--c-hex); clip-path: inherit; }
-.key-led { background: var(--c-led); border-radius: 50%; box-shadow: 0 0 6px var(--c-led); }
+.key-normal { background: var(--c-hex); }
+.key-node { background: conic-gradient(var(--c-edge) 0 25%, var(--c-2way) 0 50%, var(--c-3way) 0 75%, var(--c-hex) 0); }
+.key-led { background: var(--c-led); border-radius: 50%; }
+.key-edgeled { width: 16px; height: 6px; background: var(--c-led); }
 .key-label { width: auto; height: auto; border: 0; font-size: 0.95rem; line-height: 1; color: var(--accent); }
-
-/* parts count, written up as a tally */
-.counts dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 14px;
-}
-
-.counts dl > div {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  border-bottom: 1.5px dashed var(--line);
-  padding-block: 3px;
-  grid-column: 1 / -1;
-}
-
-.counts dl > div.big {
-  grid-column: auto;
-  flex-direction: column;
-  align-items: flex-start;
-  border: 0;
-  border-radius: 8px;
-  padding: 6px 10px 4px;
-  margin-bottom: 8px;
-  background: var(--mint);
-  color: #2a2a3c;
-}
-
-.counts dl > div.big + div.big { background: var(--sky); }
-.counts dt { color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
-.counts .big dt { color: #55536a; }
-.counts dd { margin: 0; font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
-.counts .big dd { font: 400 2.2rem/1 var(--hand); }
 
 .note {
   margin: 4px 0 0;
@@ -531,12 +460,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 }
 
 .note:empty { display: none; }
-
-.geometry {
-  margin: 0;
-  font: 12px/1.6 var(--mono);
-  color: var(--muted);
-}
 
 /* --- stage: a notebook page with spiral binding ----------------------------- */
 
@@ -604,13 +527,41 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .hint {
   position: absolute;
   left: 36px;
-  right: 16px;
+  right: 190px;
   bottom: 10px;
   margin: 0;
   font-size: 1.05rem;
   color: var(--muted);
   pointer-events: none;
 }
+
+.hint.pushed { bottom: 58px; }
+
+.view-switch {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 3;
+  background: var(--page);
+}
+
+/* selection actions, only while something is selected or excluded */
+.pick-bar {
+  position: absolute;
+  left: 36px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  max-width: calc(100% - 230px);
+  animation: note-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pick-bar > span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.pick-bar .btn { font-size: 1rem; padding: 1px 12px; }
+.pick-bar #pick-excluded { margin-left: 6px; }
 
 /* --- 2D drawing ------------------------------------------------------------ */
 
@@ -686,12 +637,12 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .edge:hover { fill: color-mix(in srgb, var(--c-edge) 40%, transparent); stroke: var(--ink); }
 
 /* hidden layers; hexagons stay clickable through the wall-point hit test */
-.hide-hex .hex:not(.ghost):not(.selected) polygon { visibility: hidden; }
+.hide-normal.hide-led .hex:not(.ghost):not(.selected) polygon { visibility: hidden; }
 .hide-labels .hex text { display: none; }
 .hide-3way .node-3way,
 .hide-2way .node-2way,
 .hide-edge .node-edge,
-.hide-edges .edge { display: none; }
+.hide-normal.hide-edgeled .edge { display: none; }
 
 /* fallback while the meshes load, or when WebGL is unavailable: watercolour washes and pencil */
 .flat .hex:not(.ghost) .sketch { fill: color-mix(in srgb, var(--c-hex) 45%, transparent); stroke: var(--ink); }
@@ -746,6 +697,58 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .hex-card dt { color: #5d5a70; }
 .hex-card dd { margin: 0; font: 600 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
 
+/* running totals, pinned to the bottom-right corner of the page */
+.totals {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 3;
+  min-width: 150px;
+  background: var(--mint);
+  color: #2a2a3c;
+  border-radius: 2px 14px 2px 2px;
+  padding: 10px 14px 8px;
+  box-shadow: 3px 5px 0 var(--shadow);
+  rotate: 1deg;
+  pointer-events: none;
+}
+
+.totals dl { margin: 0; display: grid; gap: 2px; }
+.totals dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; }
+.totals dt { color: #55536a; font-size: 1.1rem; }
+.totals dd { margin: 0; font: 400 1.9rem/1 var(--hand); font-variant-numeric: tabular-nums; }
+
+/* on/off switch: a pill with a knob that slides across */
+.switch {
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--page);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+
+.switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s;
+}
+
+.switch[aria-checked="true"] { background: var(--mint); }
+.switch[aria-checked="true"] span { translate: 18px 0; background: var(--ink); }
+.switch:focus-visible { outline: 2px dashed var(--accent); outline-offset: 3px; }
+
+.card-body.off { opacity: 0.45; }
+
 .tooltip {
   position: fixed;
   left: 0;
@@ -781,6 +784,9 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .side { overflow: visible; padding: 4px 2px 12px; }
   .hex-card { left: 24px; min-width: 0; max-width: calc(100% - 40px); }
   .hint { display: none; }
+  .pick-bar { left: 24px; bottom: auto; top: 56px; max-width: calc(100% - 40px); }
+  .totals { right: 10px; bottom: 10px; min-width: 0; padding: 6px 10px; }
+  .totals dd { font-size: 1.4rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

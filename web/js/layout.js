@@ -264,20 +264,28 @@ export function countGroups(hexes, nodes) {
   return new Set(hexes.map((h) => find(h.id))).size;
 }
 
-export function summarize(W, H, hexes, nodes, lat, edges = []) {
-  const hexArea = ((3 * Math.sqrt(3)) / 2) * lat.R * lat.R;
+// What one model carries by itself: a node plate stack per middle plate, and its LED channels.
+export function partsOf(visuals) {
   return {
-    hexagons: hexes.length,
-    nodes: nodes.length,
-    threeWay: nodes.filter((n) => n.kind === '3-way').length,
-    twoWay: nodes.filter((n) => n.kind === '2-way').length,
-    edge: nodes.filter((n) => n.kind === 'edge').length,
-    edges: edges.length,
-    joints: nodes.reduce((s, n) => s + n.joints.length, 0) + edges.length,
-    spareFrames: nodes.reduce((s, n) => s + n.spare.length, 0),
-    coverage: (hexes.length * hexArea) / (W * H),
-    groups: countGroups(hexes, nodes),
+    nodes: visuals.filter((v) => v.part === 'middle_plate').length,
+    leds: visuals.filter((v) => v.part.startsWith('led')).length,
   };
+}
+
+// Every node and LED on the wall: the joining nodes between hexagons plus those built into each hexagon and Edge.
+export function summarize(hexes, nodes, lat, edges = []) {
+  const kind = (k) => nodes.filter((n) => n.kind === k).length;
+  const counts = {
+    edge: kind('edge'),
+    '2way': kind('2-way'),
+    '3way': kind('3-way'),
+    normal: hexes.length * lat.perHex.nodes + edges.length * lat.perEdge.nodes,
+    led: hexes.length * lat.perHex.leds,
+    edgeled: edges.length * lat.perEdge.leds,
+  };
+  counts.nodes = nodes.length + counts.normal;
+  counts.leds = counts.led + counts.edgeled;
+  return { counts, hexagons: hexes.length, groups: countGroups(hexes, nodes) };
 }
 
 // Outline of the hexagons as closed loops of corners, each run with the hexagons on its left: the outer boundary

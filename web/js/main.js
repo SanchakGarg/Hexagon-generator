@@ -1,5 +1,5 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf } from './layout.js';
 import { renderWall } from './render.js';
 import { initTheme, initSections } from './prefs.js';
 
@@ -28,13 +28,17 @@ const btn3d = $('view-3d');
 const excludeBtn = $('exclude-btn');
 const clearBtn = $('clear-btn');
 const restoreBtn = $('restore-btn');
+const boardToggle = $('board-toggle');
+const pickBar = $('pick-bar');
 const layerButtons = [...document.querySelectorAll('#layers [data-layer]')];
+const groupButtons = [...document.querySelectorAll('#layers [data-group]')];
 let geometry = null;
 let lattice = null;
 let unit = 'm';
 let lastLayout = null;
 let view = '2d';
 let viewer = null;
+let boardOn = true;
 
 // hexagons are tracked by grid position, so a selection survives small wall edits
 const keyOf = (h) => `${h.row}:${h.col}`;
@@ -53,10 +57,6 @@ let zoomKey = '';
 
 const formatLength = (m) => `${(m / UNITS[unit]).toFixed(DECIMALS[unit])} ${unit}`;
 
-function setStat(id, value) {
-  $(id).textContent = value;
-}
-
 function applyViewBox() {
   if (!baseBox) return;
   const w = baseBox.w / zoom.scale;
@@ -71,49 +71,16 @@ function resetZoom() {
   applyViewBox();
 }
 
-function chip(h, label, onRemove) {
-  const li = document.createElement('li');
-  li.className = 'chip';
-  li.dataset.key = keyOf(h);
-  li.title = `row ${h.row}, col ${h.col}`;
-  li.append(h.id);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.textContent = '×';
-  btn.setAttribute('aria-label', `${label} ${h.id}`);
-  btn.addEventListener('click', onRemove);
-  li.append(btn);
-  return li;
-}
-
-// keeps the chips already on screen, so only new ones pop in
-function syncChips(list, hexes, label, onRemove) {
-  const have = new Map([...list.children].map((li) => [li.dataset.key, li]));
-  list.replaceChildren(
-    ...hexes.map((h) => {
-      const li = have.get(keyOf(h));
-      if (li && li.firstChild.textContent === h.id) return li;
-      return chip(h, label, () => onRemove(h));
-    }),
-  );
-}
-
-function renderLists() {
-  const sel = gridHexes.filter((h) => selected.has(keyOf(h)));
-  const exc = gridHexes.filter((h) => excluded.has(keyOf(h)));
-  syncChips($('selected-list'), sel, 'Deselect', (h) => {
-    selected.delete(keyOf(h));
-    update();
-  });
-  syncChips($('excluded-list'), exc, 'Restore', (h) => {
-    excluded.delete(keyOf(h));
-    update();
-  });
-  $('selected-count').textContent = sel.length;
-  $('excluded-count').textContent = exc.length;
-  excludeBtn.disabled = sel.length === 0;
-  clearBtn.disabled = sel.length === 0;
-  restoreBtn.disabled = exc.length === 0;
+// selection and exclusion live in a strip on the drawing, shown only while there is something to act on
+function renderPicks() {
+  const sel = gridHexes.filter((h) => selected.has(keyOf(h))).length;
+  const exc = gridHexes.filter((h) => excluded.has(keyOf(h))).length;
+  $('selected-count').textContent = sel;
+  $('excluded-count').textContent = exc;
+  for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
+  for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
+  pickBar.hidden = sel === 0 && exc === 0;
+  hint.classList.toggle('pushed', !pickBar.hidden);
 }
 
 function update() {
@@ -127,7 +94,7 @@ function update() {
   }
   const t = parseFloat(thicknessIn.value) * scale;
   const raise = parseFloat(raiseIn.value) * scale;
-  if (!(t > 0 && raise >= 0)) {
+  if (boardOn && !(t > 0 && raise >= 0)) {
     note.textContent = 'Enter a board thickness above zero and a raise of zero or more.';
     return;
   }
@@ -141,9 +108,9 @@ function update() {
 
   const nodes = buildNodes(hexes, lattice);
   const edges = buildEdges(hexes, nodes, lattice);
-  const s = summarize(W, H, hexes, nodes, lattice, edges);
+  const s = summarize(hexes, nodes, lattice, edges);
   const outline = buildOutline(hexes, lattice);
-  lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { t, raise }, outline };
+  lastLayout = { W, H, hexes, nodes, edges, lat: lattice, board: { on: boardOn, t, raise }, outline };
   baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
@@ -158,21 +125,15 @@ function update() {
   } else {
     applyViewBox();
   }
-  renderLists();
+  renderPicks();
 
-  setStat('stat-hex', s.hexagons);
-  setStat('stat-nodes', s.nodes);
-  setStat('stat-3way', s.threeWay);
-  setStat('stat-2way', s.twoWay);
-  setStat('stat-edge', s.edge);
-  setStat('stat-edges', s.edges);
-  setStat('stat-joints', s.joints);
-  setStat('stat-spare', s.spareFrames);
+  for (const el of document.querySelectorAll('#layers [data-count]')) el.textContent = s.counts[el.dataset.count];
+  $('total-nodes').textContent = s.counts.nodes;
+  $('total-leds').textContent = s.counts.leds;
   // the board follows the outline, grown so the node bodies sit on it
   const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
-  setStat('stat-board', rim.length ? `${formatLength(span('x'))} × ${formatLength(span('z'))}` : '–');
-  setStat('stat-coverage', `${(s.coverage * 100).toFixed(1)}%`);
+  $('board-size').textContent = boardOn && rim.length ? `board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
 
   if (gridHexes.length === 0) {
     note.textContent = `Wall too small. One hexagon needs at least ${formatLength(2 * lattice.hw)} × ${formatLength(2 * lattice.hh)}.`;
@@ -211,32 +172,22 @@ function hover(id) {
   showHexCard(id);
 }
 
-// what one hexagon brings to the wall: the nodes it owns, its Edges and the joints they make
+// the nodes and LEDs one hexagon brings: its own, those of its Edges, and the joining nodes it owns
 function showHexCard(id) {
   const h = id && lastLayout?.hexes.find((x) => x.id === id);
   if (!h) {
     hexCard.hidden = true;
     return;
   }
-  const { nodes, edges } = lastLayout;
-  const corners = nodes.filter((n) => n.joints.some((j) => j.hexId === id));
-  const owned = nodes.filter((n) => n.hexId === id);
-  const kinds = { '3-way': 0, '2-way': 0, edge: 0 };
-  for (const n of owned) kinds[n.kind]++;
-  const neighbours = new Set(corners.flatMap((n) => n.joints.map((j) => j.hexId)).filter((x) => x !== id));
-  const own = edges.filter((e) => e.hexId === id);
+  const { nodes, edges, lat } = lastLayout;
+  const own = edges.filter((e) => e.hexId === id).length;
   const rows = [
-    ['neighbours', neighbours.size],
-    ['nodes', owned.length ? `${owned.length} · ${owned.map((n) => n.id).join(' ')}` : 0],
-    ['3-way nodes', kinds['3-way']],
-    ['2-way nodes', kinds['2-way']],
-    ['edge nodes', kinds.edge],
-    ['Edge pieces', own.length ? `${own.length} · ${own.map((e) => e.id).join(' ')}` : 0],
-    ['joints', corners.length + own.length],
+    ['nodes', lat.perHex.nodes + own * lat.perEdge.nodes + nodes.filter((n) => n.hexId === id).length],
+    ['LEDs', lat.perHex.leds + own * lat.perEdge.leds],
   ];
   const title = document.createElement('p');
   title.className = 'hex-card-title';
-  title.textContent = `${h.id} · row ${h.row}, col ${h.col}${selected.has(keyOf(h)) ? ' · selected' : ''}`;
+  title.textContent = h.id;
   const dl = document.createElement('dl');
   for (const [label, value] of rows) {
     const row = document.createElement('div');
@@ -321,8 +272,15 @@ function setView(next) {
   });
 }
 
+// a group shows ticked when all its kinds are on, half-ticked when only some are
+const groupLayers = (g) => [...document.querySelectorAll(`[data-group-of="${g}"] [data-layer]`)].map((b) => b.dataset.layer);
+
 function applyLayers() {
   for (const b of layerButtons) b.setAttribute('aria-pressed', String(show[b.dataset.layer]));
+  for (const b of groupButtons) {
+    const on = groupLayers(b.dataset.group).map((l) => show[l]);
+    b.setAttribute('aria-pressed', on.every(Boolean) ? 'true' : on.some(Boolean) ? 'mixed' : 'false');
+  }
   for (const l of LAYERS) svg.classList.toggle(`hide-${l}`, !show[l]);
   viewer?.setShow(show);
 }
@@ -333,6 +291,14 @@ for (const b of layerButtons) {
     applyLayers();
   });
 }
+for (const b of groupButtons) {
+  b.addEventListener('click', () => {
+    const layers = groupLayers(b.dataset.group);
+    const next = !layers.every((l) => show[l]);
+    for (const l of layers) show[l] = next;
+    applyLayers();
+  });
+}
 $('show-all-btn').addEventListener('click', () => {
   for (const l of LAYERS) show[l] = true;
   applyLayers();
@@ -340,6 +306,16 @@ $('show-all-btn').addEventListener('click', () => {
 $('hide-all-btn').addEventListener('click', () => {
   for (const l of LAYERS) show[l] = false;
   applyLayers();
+});
+
+// the switch sits in the card's title row, so it must not also fold the card
+boardToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  boardOn = !boardOn;
+  boardToggle.setAttribute('aria-checked', String(boardOn));
+  for (const input of [thicknessIn, raiseIn]) input.disabled = !boardOn;
+  $('board-body').classList.toggle('off', !boardOn);
+  update();
 });
 
 btn2d.addEventListener('click', () => setView('2d'));
@@ -481,16 +457,12 @@ async function start() {
     geometry = await loadGeometry(new URL('..', location.href).href.replace(/\/$/, ''));
     lattice = deriveLattice(geometry.hexFrames, geometry.nodeFrames, geometry.nodeBodyRadius);
     lattice.edge = deriveEdge(geometry.edgeFrames, geometry.edgeVisuals, lattice);
+    lattice.perHex = partsOf(geometry.hexVisuals);
+    lattice.perEdge = partsOf(geometry.edgeVisuals);
   } catch (err) {
     $('note').textContent = `Could not read the URDF files: ${err.message}`;
     return;
   }
-  $('geometry').textContent =
-    `R ${(lattice.R * 1000).toFixed(1)} mm · node r ${(lattice.r * 1000).toFixed(1)} mm · ` +
-    `edge ${(lattice.edge.length * 1000).toFixed(0)} mm · ` +
-    `pitch ${(lattice.pitch * 1000).toFixed(1)} × ${(lattice.rowPitch * 1000).toFixed(1)} mm · ` +
-    `residual ${(lattice.residual * 1000).toFixed(3)} mm`;
-
   widthIn.addEventListener('input', update);
   heightIn.addEventListener('input', update);
   thicknessIn.addEventListener('input', update);

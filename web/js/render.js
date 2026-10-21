@@ -100,9 +100,6 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     <text x="${fmt(dx - tick * 1.4)}" y="${fmt(H / 2)}" text-anchor="middle" font-size="${fmt(fsDim)}" transform="rotate(-90 ${fmt(dx - tick * 1.4)} ${fmt(H / 2)})">${esc(formatLength(H))}</text>
   </g>`);
 
-  const jointsByHex = new Map(hexes.map((h) => [h.id, []]));
-  for (const n of nodes) for (const j of n.joints) jointsByHex.get(j.hexId).push(`${j.hexFrame} → ${n.id}.${j.nodeFrame}`);
-
   for (const h of excluded) {
     const tip = `${h.id} · row ${h.row}, col ${h.col}\nexcluded · click to restore`;
     parts.push(`<g class="hex ghost" data-ghost="${h.id}" data-tip="${esc(tip)}">
@@ -111,26 +108,18 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     </g>`);
   }
 
+  // placed hexagons and their parts carry no tooltip: hovering one brings up its note of nodes and LEDs instead
   for (const h of hexes) {
-    const tip = `${h.id} · row ${h.row}, col ${h.col}\nclick to ${selected.has(h.id) ? 'deselect' : 'select'}\n${jointsByHex.get(h.id).sort().join('\n')}`;
-    parts.push(`<g class="hex${selected.has(h.id) ? ' selected' : ''}" data-hex="${h.id}" data-tip="${esc(tip)}">
+    parts.push(`<g class="hex${selected.has(h.id) ? ' selected' : ''}" data-hex="${h.id}">
       <polygon points="${hexPoints(h.x, y(h.z), lat.R, 0)}"/>${sketch(h.x, y(h.z), lat.R, h.id)}
       <text x="${fmt(h.x)}" y="${fmt(y(h.z) + fsHex * 0.35)}" text-anchor="middle" font-size="${fmt(fsHex)}">${h.id}</text>
     </g>`);
   }
 
-  const edgesByNode = new Map();
-  for (const e of edges) {
-    const half = Math.max(0.012, size * 0.005);
-    const tip = `${e.id} · Edge of ${e.hexId}\n${e.edgeFrame} ↔ ${e.nodeId}.${e.nodeFrame}\nlength ${formatLength(lat.edge.length)}`;
-    parts.push(`<polygon class="edge" data-tip="${esc(tip)}" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
-    edgesByNode.set(e.nodeId, [...(edgesByNode.get(e.nodeId) ?? []), `${e.nodeFrame} ↔ ${e.id}.${e.edgeFrame}`]);
-  }
-
+  const half = Math.max(0.012, size * 0.005);
+  for (const e of edges) parts.push(`<polygon class="edge" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
   for (const n of nodes) {
-    const lines = [...n.joints.map((j) => `${j.nodeFrame} ↔ ${j.hexId}.${j.hexFrame}`), ...(edgesByNode.get(n.id) ?? [])].sort();
-    const tip = `${n.id} · ${n.kind} (${n.type} corner) · part of ${n.hexId}\n${lines.join('\n')}\nspare: ${n.spare.join(', ') || 'none'}`;
-    parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" data-tip="${esc(tip)}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
+    parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
 
   svg.innerHTML = parts.join('');

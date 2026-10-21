@@ -319,8 +319,8 @@ export async function createViewer(container, geo) {
   let edgeMeshes = { body: null, led: null };
   let edgeList = [];
   const shown = (layer) => show[layer] !== false;
-  // an Edge's LEDs follow both the LED and the Edge toggles
-  const partShown = (part) => (part.led ? shown('led') : true) && shown(part.layer);
+  // node plate stacks built into hexagons and Edges are 'normal' nodes; LEDs are 'led' in a hexagon, 'edgeled' in an Edge
+  const partShown = (part) => shown(part.layer);
 
   // an Edge is turned in-plane and slid so its edge-1 frame lands on the node frame it mates
   function edgeMatrix(e, m = new THREE.Matrix4()) {
@@ -343,13 +343,13 @@ export async function createViewer(container, geo) {
   });
   const edgeParts = edgeTpl.parts.map((p) => {
     const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
-    return { geometry: p.geometry, led: p.led, layer: 'edges', center: box.getCenter(new THREE.Vector3()) };
+    return { geometry: p.geometry, led: p.led, src: 'edge', layer: p.led ? 'edgeled' : 'normal', center: box.getCenter(new THREE.Vector3()) };
   });
 
   function buildHexParts(hc) {
     const parts = hexTpl.parts.map((p) => {
       const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
-      return { geometry: p.geometry, led: p.led, layer: 'hex', center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
+      return { geometry: p.geometry, led: p.led, src: 'hex', layer: p.led ? 'led' : 'normal', center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
     });
     // 2 cm buckets: centre stack, inner channels, inner stacks, mid channels, outer stacks, outer channels
     const bucket = (d) => Math.round(d * 50);
@@ -359,7 +359,7 @@ export async function createViewer(container, geo) {
   }
 
   function partMesh(part, parent, hexId) {
-    const body = { edges: materials.edgeBody, hex: materials.hexBody }[part.layer] ?? materials.nodeBody;
+    const body = { edge: materials.edgeBody, hex: materials.hexBody }[part.src] ?? materials.nodeBody;
     const material = (part.led ? materials.led : body).clone();
     const mesh = new THREE.Mesh(part.geometry, material);
     if (!part.led) outlined(mesh);
@@ -391,7 +391,7 @@ export async function createViewer(container, geo) {
       item.holder.removeFromParent();
       item.mesh.material.dispose();
     }
-    session.items = session.items.filter((item) => item.part.layer !== 'edges');
+    session.items = session.items.filter((item) => item.part.src !== 'edge');
     session.edgeItems = [];
     const offset = new THREE.Matrix4().makeTranslation(-group.position.x, 0, -group.position.z);
     const bucket = (d) => Math.round(d * 50);
@@ -448,12 +448,12 @@ export async function createViewer(container, geo) {
       holder.matrix.copy(nodeMatrix(n));
       hoverRoot.add(holder);
       for (const p of nodeParts) {
-        const part = { ...p, layer: nodeLayer(n) };
+        const part = { ...p, src: 'node', layer: nodeLayer(n) };
         session.nodeItems.push({ key, holder, mesh: partMesh(part, holder, h.id), part, base: palette.node[n.kind].clone(), kind: n.kind, v: 0, target: 0 });
       }
     }
     for (const item of session.nodeItems) item.ring = hexParts.rings;
-    session.items = [...session.items.filter((x) => x.part.layer === 'hex' || x.part.layer === 'edges'), ...session.nodeItems];
+    session.items = [...session.items.filter((x) => x.part.src !== 'node'), ...session.nodeItems];
   }
 
   function disposeItem(item) {
@@ -715,7 +715,7 @@ export async function createViewer(container, geo) {
     lattice = lat;
 
     // root turns URDF Y into world -Z
-    wallObjects = buildBoard(outline, board, -backOf(lat));
+    wallObjects = board.on ? buildBoard(outline, board, -backOf(lat)) : [];
 
     hexParts ??= buildHexParts(lat.hexCenter);
     hexList = hexes;
@@ -759,7 +759,7 @@ export async function createViewer(container, geo) {
       bounds.minZ = Math.min(bounds.minZ, p.z);
       bounds.maxZ = Math.max(bounds.maxZ, p.z);
     }
-    const size = [...Object.values(bounds), board.raise].map((v) => v.toFixed(4)).join(',');
+    const size = [...Object.values(bounds), board.on ? board.raise : 0].map((v) => v.toFixed(4)).join(',');
     if (size !== fittedSize) {
       fittedSize = size;
       fitPerspective(bounds);
@@ -798,10 +798,10 @@ export async function createViewer(container, geo) {
   }
 
   function applyShow() {
-    if (hexMeshes.body) hexMeshes.body.visible = shown('hex');
+    if (hexMeshes.body) hexMeshes.body.visible = shown('normal');
     if (hexMeshes.led) hexMeshes.led.visible = shown('led');
-    if (edgeMeshes.body) edgeMeshes.body.visible = shown('edges');
-    if (edgeMeshes.led) edgeMeshes.led.visible = shown('edges') && shown('led');
+    if (edgeMeshes.body) edgeMeshes.body.visible = shown('normal');
+    if (edgeMeshes.led) edgeMeshes.led.visible = shown('edgeled');
     for (const session of sessions) for (const { mesh, part } of session.items) mesh.visible = partShown(part);
   }
 
@@ -954,7 +954,13 @@ export async function createViewer(container, geo) {
     materials.led.emissive.copy(palette.led);
     materials.board.color.copy(palette.board);
     ink.uniforms.color.value.copy(palette.outline);
-    for (const session of sessions) for (const item of session.nodeItems) item.base.copy(palette.node[item.kind]);
+    for (const session of sessions) {
+      for (const item of session.nodeItems) item.base.copy(palette.node[item.kind]);
+      // lifted parts carry their own material copies
+      for (const { mesh, part } of session.items) {
+        if (part.led) mesh.material.color.copy(palette.led), mesh.material.emissive.copy(palette.led);
+      }
+    }
     paintNodes();
     writeHexes();
     sessions.forEach(applySession);
