@@ -1027,7 +1027,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .app:not([data-page="2"]) [data-page-only="2"],
 .app:not([data-page="3"]) [data-page-only="3"] { display: none; }
 
-.card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
+.card.totals { display: flex; flex-direction: column; max-height: calc(100% - 90px); pointer-events: auto; }
+.totals-scroll { flex: 0 1 auto; min-height: 0; overflow: hidden auto; scrollbar-width: thin; }
 .bom { min-width: 330px; margin-top: 4px; }
 .bom-head { display: flex; align-items: baseline; gap: 10px; }
 .bom-head .for { color: var(--muted); font-size: 1.1rem; }
@@ -1053,13 +1054,15 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .toast.show { animation: note-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .bom .line {
   display: grid;
-  grid-template-columns: 1fr 3.2em 5.6em;
+  /* the item column gives way first on a narrow screen, so prices never run out of the card */
+  grid-template-columns: minmax(0, 1fr) 3.2em minmax(5.6em, max-content);
   gap: 10px;
   font-size: 1.1rem;
   line-height: 1.2;
   padding-block: 4px 3px;
 }
-.bom .line > :not(:first-child) { text-align: right; }
+.bom .line > :not(:first-child) { text-align: right; white-space: nowrap; }
+.bom .line > :first-child { overflow-wrap: anywhere; }
 .bom .qty { font-variant-numeric: tabular-nums; }
 .bom .cols { color: var(--muted); font-size: 0.95rem; border-bottom: 1.5px solid var(--line); }
 .bom .cols b { color: var(--muted); }
@@ -1226,7 +1229,10 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .hex-card { left: 24px; min-width: 0; max-width: calc(100% - 40px); }
   .hint { display: none; }
   .pick-bar { left: 24px; bottom: auto; top: 56px; max-width: calc(100% - 40px); }
-  .card.totals { right: 10px; bottom: 10px; min-width: 0; padding: 8px 12px 6px; }
+  /* keeps clear of the spiral binding down the drawing's left edge */
+  .card.totals { right: 10px; bottom: 10px; min-width: 0; max-width: calc(100% - 44px); max-height: calc(100% - 64px); padding: 8px 12px 6px; }
+  .bom { min-width: 0; }
+  .labels-key { width: auto; max-width: 280px; }
   .line { font-size: 1.05rem; line-height: 24px; }
   .stage::before { top: 50px; }
   .tabs { padding-left: 22px; }

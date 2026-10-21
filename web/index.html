@@ -157,45 +157,48 @@
         </div>
         <div class="hex-card" id="hex-card" hidden aria-live="polite"></div>
         <aside class="card totals" data-section="notes" aria-labelledby="notes-title">
-          <div data-page-only="1">
-            <h2 id="notes-title">Notes</h2>
-            <div class="lines">
-              <p class="line"><span>Nodes</span><b id="total-nodes">–</b></p>
-              <p class="line"><span>LED channels</span><b id="total-leds">–</b></p>
-            </div>
-          </div>
-          <div class="labels-key" data-page-only="2">
-            <h2>Node labels</h2>
-            <p class="help">The same in every hexagon</p>
-            <div class="lines">
-              <p class="line"><span>MCU node</span><b>M</b></p>
-              <p class="line"><span>Built-in, clockwise</span><b>1, 2, …</b></p>
-              <p class="line"><span>Corners, clockwise</span><b>a–f</b></p>
-              <p class="line"><span>Edge plates</span><b>E1–E3</b></p>
-            </div>
-            <h2 class="key-head">Wiring</h2>
-            <p class="help">Each hexagon's M drives six chains. Hover one to pick it out.</p>
-            <div class="wkey" id="wiring-key">
-              <p class="chain w-1" data-chain="L1"><i class="swatch"></i><b>L1</b></p>
-              <p class="chain w-2" data-chain="L2"><i class="swatch"></i><b>L2</b></p>
-              <p class="chain w-3" data-chain="L3"><i class="swatch"></i><b>L3</b></p>
-              <p class="chain w-4" data-chain="L4"><i class="swatch"></i><b>L4</b></p>
-              <p class="chain w-5" data-chain="L5"><i class="swatch"></i><b>L5</b></p>
-              <p class="chain w-6" data-chain="L6"><i class="swatch"></i><b>L6</b></p>
-            </div>
-            <div class="wkey">
-              <div class="wires">
-                <span class="pin-5v"><i class="swatch"></i>5V</span>
-                <span class="pin-gnd"><i class="swatch"></i>GND</span>
-                <span class="pin-sig"><i class="swatch"></i>SIG</span>
-                <span class="pin-sig"><i class="swatch free"></i>FREE</span>
+          <!-- the card stays put with its border and tape; this scrolls when the list is taller than the drawing -->
+          <div class="totals-scroll">
+            <div data-page-only="1">
+              <h2 id="notes-title">Notes</h2>
+              <div class="lines">
+                <p class="line"><span>Nodes</span><b id="total-nodes">–</b></p>
+                <p class="line"><span>LED channels</span><b id="total-leds">–</b></p>
               </div>
-              <p class="help">A coloured bar marks a channel's IN end, where its data enters; a dotted ring is a SIG↔FREE switch. With a neighbour in place of an Edge, the turn is at its node and the chain stops at the corner.</p>
             </div>
-          </div>
-          <div data-page-only="3">
-            <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span></div>
-            <div class="lines bom" id="bom"></div>
+            <div class="labels-key" data-page-only="2">
+              <h2>Node labels</h2>
+              <p class="help">The same in every hexagon</p>
+              <div class="lines">
+                <p class="line"><span>MCU node</span><b>M</b></p>
+                <p class="line"><span>Built-in, clockwise</span><b>1, 2, …</b></p>
+                <p class="line"><span>Corners, clockwise</span><b>a–f</b></p>
+                <p class="line"><span>Edge plates</span><b>E1–E3</b></p>
+              </div>
+              <h2 class="key-head">Wiring</h2>
+              <p class="help">Each hexagon's M drives six chains. Hover one to pick it out.</p>
+              <div class="wkey" id="wiring-key">
+                <p class="chain w-1" data-chain="L1"><i class="swatch"></i><b>L1</b></p>
+                <p class="chain w-2" data-chain="L2"><i class="swatch"></i><b>L2</b></p>
+                <p class="chain w-3" data-chain="L3"><i class="swatch"></i><b>L3</b></p>
+                <p class="chain w-4" data-chain="L4"><i class="swatch"></i><b>L4</b></p>
+                <p class="chain w-5" data-chain="L5"><i class="swatch"></i><b>L5</b></p>
+                <p class="chain w-6" data-chain="L6"><i class="swatch"></i><b>L6</b></p>
+              </div>
+              <div class="wkey">
+                <div class="wires">
+                  <span class="pin-5v"><i class="swatch"></i>5V</span>
+                  <span class="pin-gnd"><i class="swatch"></i>GND</span>
+                  <span class="pin-sig"><i class="swatch"></i>SIG</span>
+                  <span class="pin-sig"><i class="swatch free"></i>FREE</span>
+                </div>
+                <p class="help">A coloured bar marks a channel's IN end, where its data enters; a dotted ring is a SIG↔FREE switch. With a neighbour in place of an Edge, the turn is at its node and the chain stops at the corner.</p>
+              </div>
+            </div>
+            <div data-page-only="3">
+              <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span></div>
+              <div class="lines bom" id="bom"></div>
+            </div>
           </div>
         </aside>
       </div>
