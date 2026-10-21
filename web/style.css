@@ -30,6 +30,15 @@
   --c-select: #f597b0;
   --c-board: #fcebd2;
   --c-outline: #3b3a4a;
+  /* wiring: 5V and GND are the same everywhere, each chain's signal has its own colour */
+  --w-5v: #e5484d;
+  --w-gnd: #2b2a35;
+  --w-m1: #2f7fe0;
+  --w-m2: #0f9e94;
+  --w-m4: #e08a00;
+  --w-m5: #8e4fd6;
+  --w-m7: #2c9c4f;
+  --w-m8: #d6458f;
   --hl: 80%; /* highlighter strength */
 
   --hand: "Patrick Hand", "Segoe Print", "Bradley Hand", system-ui, sans-serif;
@@ -69,6 +78,15 @@
   --c-outline: #15162a;
   --hl: 34%;
   color-scheme: dark;
+
+  --w-5v: #ff6b6b;
+  --w-gnd: #a9a5c2;
+  --w-m1: #6aa8ff;
+  --w-m2: #4fd1c5;
+  --w-m4: #ffb347;
+  --w-m5: #b78cff;
+  --w-m7: #6fd48c;
+  --w-m8: #ff85c0;
 }
 
 * { box-sizing: border-box; }
@@ -458,6 +476,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .key-node { background: conic-gradient(var(--c-edge) 0 20%, var(--c-2way) 0 40%, var(--c-3way) 0 60%, var(--c-mcu) 0 80%, var(--c-hex) 0); }
 .key-led { background: var(--c-led); border-radius: 50%; }
 .key-edgeled { width: 16px; height: 6px; background: var(--c-led); }
+.key-wiring { width: 16px; height: 4px; border: 0; border-radius: 2px; background: linear-gradient(var(--w-5v) 0 25%, var(--w-m1) 0 50%, var(--w-m7) 0 75%, var(--w-gnd) 0); }
+.key-head { margin-top: 12px; }
 .key-label { width: auto; height: auto; border: 0; font-size: 0.95rem; line-height: 1; color: var(--accent); }
 
 .note {
@@ -876,6 +896,54 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
+/* wiring on the labels page */
+.w-1 { --w: var(--w-m1); }
+.w-2 { --w: var(--w-m2); }
+.w-4 { --w: var(--w-m4); }
+.w-5 { --w: var(--w-m5); }
+.w-7 { --w: var(--w-m7); }
+.w-8 { --w: var(--w-m8); }
+.wiring path,
+.wiring circle {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  transition: opacity 0.2s, stroke-width 0.15s;
+}
+.wiring .sheath { stroke: var(--page); stroke-linecap: butt; opacity: 0.9; vector-effect: none; pointer-events: none; }
+.wiring .pwr { stroke-width: 1.1px; }
+.wiring .pwr-5v { stroke: var(--w-5v); }
+.wiring .pwr-gnd { stroke: var(--w-gnd); }
+.wiring .sig { stroke: var(--w); stroke-width: 2.2px; }
+.wiring .sig.free { stroke-dasharray: 4 3; }
+.wiring .chev { stroke: var(--w); stroke-width: 1.6px; pointer-events: none; }
+.wiring .switch { stroke: var(--w); stroke-width: 1.4px; stroke-dasharray: 2 2.5; }
+.wiring .conn { stroke: var(--muted); stroke-width: 3.2px; stroke-linecap: butt; }
+.wiring .conn.in { stroke: var(--w); }
+.wiring .sig:hover,
+.wiring .pwr:hover { stroke-width: 3.6px; }
+.wiring .conn:hover { stroke-width: 5px; }
+.wiring.focus [data-chain]:not(.lit) { opacity: 0.1; }
+.hide-wiring .wiring { display: none; }
+
+/* the wiring key in the notes card */
+.labels-key { width: 280px; }
+.labels-key .help { margin: 0; font-size: 0.95rem; line-height: 1.2; }
+.wkey { display: grid; gap: 0; margin-top: 4px; }
+.wkey .chain { display: flex; align-items: center; gap: 8px; margin: 0; line-height: 1.5; cursor: default; border-radius: 4px; padding: 0 4px; }
+.wkey .chain:hover { background: color-mix(in srgb, var(--w) 14%, transparent); }
+.wkey .chain b { color: var(--w); font-family: var(--mono); font-size: 0.8rem; min-width: 2.2em; }
+.wkey .chain span { font-family: var(--mono); font-size: 0.72rem; color: var(--ink); white-space: nowrap; }
+.wkey .swatch { width: 18px; height: 0; border-top: 3px solid var(--w); flex: none; }
+.wkey .swatch.free { border-top-style: dashed; }
+.wkey .wires { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 4px; font-size: 0.9rem; color: var(--muted); }
+.wkey .wires span { display: inline-flex; align-items: center; gap: 5px; }
+.wkey .pin-5v { --w: var(--w-5v); }
+.wkey .pin-gnd { --w: var(--w-gnd); }
+.wkey .pin-sig { --w: var(--ink); }
+
 /* the hexagon names would sit on the MCU labels */
 .labelling .hex text { display: none; }
 .hide-3way .node-3way,

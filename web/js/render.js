@@ -49,8 +49,46 @@ function stripPoints(x1, y1, x2, y2, halfWidth) {
     .join(' ');
 }
 
+const line = (pts, y) => pts.map((p, i) => `${i ? 'L' : 'M'}${fmt(p.x)},${fmt(y(p.z))}`).join('');
+
+// Each chain's signal wire in its own colour (solid on SIG, dashed on FREE), 5V and GND the same everywhere, a
+// connector bar at both ends of every channel, chevrons for the data direction and a ring where a chain switches wire.
+function wiringSvg(w, y) {
+  const out = ['<g class="wiring">'];
+  for (const s of w.sheaths) out.push(`<path class="sheath" data-chain="${s.chain}" d="${line(s.points, y)}" stroke-width="${fmt(w.lane * 4.4)}"/>`);
+  for (const p of w.power) {
+    out.push(`<path class="pwr pwr-${p.which.toLowerCase()}" data-chain="${p.chain}" d="${line(p.points, y)}" data-tip="${esc(`${p.which} · channel ${p.channel}`)}"/>`);
+  }
+  for (const s of w.signals) {
+    const tip = `${s.chain} · ${s.from} → ${s.to} on ${s.wire}\nchannel ${s.channel}`;
+    out.push(`<path class="sig w-${s.key}${s.wire === 'FREE' ? ' free' : ''}" data-chain="${s.chain}" d="${line(s.points, y)}" data-tip="${esc(tip)}"/>`);
+  }
+  for (const c of w.connectors) {
+    const a = { x: c.x + c.n.x * c.half, z: c.z + c.n.z * c.half };
+    const b = { x: c.x - c.n.x * c.half, z: c.z - c.n.z * c.half };
+    const tip = `Channel ${c.channel} · ${c.end} @ ${c.node}\npins: 5V · SIG · FREE · GND`;
+    out.push(`<path class="conn ${c.end.toLowerCase()} w-${c.chain.slice(1)}" data-chain="${c.chain}" d="${line([a, b], y)}" data-tip="${esc(tip)}"/>`);
+  }
+  const k = w.lane * 1.1;
+  for (const a of w.arrows) {
+    const ux = Math.cos(a.angle);
+    const uz = Math.sin(a.angle);
+    const pts = [
+      { x: a.x - ux * k + -uz * k, z: a.z - uz * k + ux * k },
+      { x: a.x + ux * k * 0.4, z: a.z + uz * k * 0.4 },
+      { x: a.x - ux * k - -uz * k, z: a.z - uz * k - ux * k },
+    ];
+    out.push(`<path class="chev w-${a.key}" data-chain="M${a.key}" d="${line(pts, y)}"/>`);
+  }
+  for (const s of w.switches) {
+    out.push(`<circle class="switch w-${s.key}" data-chain="${s.chain}" cx="${fmt(s.x)}" cy="${fmt(y(s.z))}" r="${fmt(w.lane * ('147'.includes(s.key) ? 6.4 : 5.5))}" data-tip="${esc(`${s.chain} switches ${s.text} at ${s.node}`)}"/>`);
+  }
+  out.push('</g>');
+  return out.join('');
+}
+
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -121,6 +159,9 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const n of nodes) {
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
+
+  // labels page: the LED wiring, under the node labels
+  if (wiring) parts.push(wiringSvg(wiring, y));
 
   // labels page: a tiny label at the centre of every node, the same set in each hexagon
   if (labels) {

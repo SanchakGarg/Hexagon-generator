@@ -118,6 +118,7 @@
               <button type="button" data-layer="edgeled" aria-pressed="true"><span class="key key-edgeled"></span>Edge LEDs<span class="n" data-count="edgeled"></span></button>
             </div>
             <button type="button" data-layer="labels" aria-pressed="true"><span class="key key-label">a</span>Labels</button>
+            <button type="button" data-layer="wiring" aria-pressed="true"><span class="key key-wiring"></span>Wiring</button>
           </div>
           <div class="actions">
             <button type="button" class="btn" id="show-all-btn">Show all</button>
@@ -163,7 +164,7 @@
               <p class="line"><span>LED channels</span><b id="total-leds">–</b></p>
             </div>
           </div>
-          <div data-page-only="2">
+          <div class="labels-key" data-page-only="2">
             <h2>Node labels</h2>
             <p class="help">The same in every hexagon</p>
             <div class="lines">
@@ -171,6 +172,23 @@
               <p class="line"><span>Built-in, clockwise</span><b>1, 2, …</b></p>
               <p class="line"><span>Corners, clockwise</span><b>a–f</b></p>
               <p class="line"><span>Edge plates</span><b>E1–E3</b></p>
+            </div>
+            <h2 class="key-head">Wiring</h2>
+            <p class="help">Each hexagon's M drives six chains. ⇢ is a run back on the FREE wire.</p>
+            <div class="wkey" id="wiring-key">
+              <p class="chain w-1" data-chain="M1"><i class="swatch"></i><b>M1</b><span>M→1→E1 ⇢ 2→3→b→E1</span></p>
+              <p class="chain w-2" data-chain="M2"><i class="swatch"></i><b>M2</b><span>M→2→E1 ⇢ 1→9→a→E1</span></p>
+              <p class="chain w-4" data-chain="M4"><i class="swatch"></i><b>M4</b><span>M→4→E3 ⇢ 5→6→d→E3</span></p>
+              <p class="chain w-5" data-chain="M5"><i class="swatch"></i><b>M5</b><span>M→5→E3 ⇢ 4→3→c→E3</span></p>
+              <p class="chain w-7" data-chain="M7"><i class="swatch"></i><b>M7</b><span>M→7→E2 ⇢ 8→9→f→E2</span></p>
+              <p class="chain w-8" data-chain="M8"><i class="swatch"></i><b>M8</b><span>M→8→E2 ⇢ 7→6→e→E2</span></p>
+              <div class="wires">
+                <span class="pin-5v"><i class="swatch"></i>5V</span>
+                <span class="pin-gnd"><i class="swatch"></i>GND</span>
+                <span class="pin-sig"><i class="swatch"></i>SIG</span>
+                <span class="pin-sig"><i class="swatch free"></i>FREE</span>
+              </div>
+              <p class="help">A coloured bar marks a channel's IN end, where its data enters; a dotted ring is a SIG↔FREE switch. With a neighbour in place of an Edge, the turn is at its node and the chain stops at the corner.</p>
             </div>
           </div>
           <div data-page-only="3">

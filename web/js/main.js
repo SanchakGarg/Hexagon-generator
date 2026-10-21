@@ -1,6 +1,7 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
+import { buildWiring, strandPaths } from './wiring.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -8,7 +9,7 @@ const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
   '2d': 'Hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
-  labels: 'Every hexagon labels its nodes the same way · scroll to zoom · drag to pan · double-click to reset',
+  labels: 'Hover a wire or connector for its pins · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
 const PAGES = ['Configure', 'Node labels', 'Parts list'];
@@ -252,12 +253,15 @@ function update() {
   for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
   const picks = page === PARTS_PAGE ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
   const labels = page === LABELS_PAGE ? allNodes : null;
+  const wiring = labels ? strandPaths(buildWiring(hexes, edges, lattice, allNodes), lattice) : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
   viewer?.update(lastLayout);
+  viewer?.setWiring(wiring);
+  focusChain(focusedChain);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
   // refit when the wall changes, or when the drawing grew or shrank while the view wasn't zoomed
@@ -491,6 +495,21 @@ boardToggle.addEventListener('click', (e) => {
   setBoard(!boardOn);
   update();
 });
+
+// hovering a chain in the wiring key picks it out on the drawing and the model
+let focusedChain = null;
+function focusChain(id) {
+  focusedChain = id;
+  const group = svg.querySelector('.wiring');
+  group?.classList.toggle('focus', !!id);
+  for (const el of svg.querySelectorAll('.wiring .lit')) el.classList.remove('lit');
+  if (id) for (const el of svg.querySelectorAll(`.wiring [data-chain="${id}"]`)) el.classList.add('lit');
+  viewer?.focusWiring(id);
+}
+for (const row of document.querySelectorAll('#wiring-key [data-chain]')) {
+  row.addEventListener('pointerenter', () => focusChain(row.dataset.chain));
+  row.addEventListener('pointerleave', () => focusChain(null));
+}
 
 // --- pages: configure the wall, label its nodes, then the parts list ----------------------------
 

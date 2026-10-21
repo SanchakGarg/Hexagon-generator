@@ -823,6 +823,8 @@ export async function createViewer(container, geo) {
     if (edgeMeshes.body) edgeMeshes.body.visible = shown('normal');
     if (edgeMeshes.led) edgeMeshes.led.visible = shown('edgeled');
     for (const session of sessions) for (const { mesh, part } of session.items) mesh.visible = partShown(part);
+    // in 2D the overlay draws the wiring, so the model only carries it in 3D
+    wiringRoot.visible = mode === '3d' && shown('wiring');
   }
 
   function setShow(next) {
@@ -926,6 +928,7 @@ export async function createViewer(container, geo) {
     const live = fly ? { pos: perspective.position.clone(), target: flyTarget.clone() } : null;
     if (was === '3d' && !fly) orbitPose = { pos: perspective.position.clone(), target: controls.target.clone() };
     mode = next;
+    applyShow();
     controls.enabled = false;
     renderer.domElement.style.cursor = next === '3d' ? 'grab' : '';
     resize();
@@ -967,9 +970,112 @@ export async function createViewer(container, geo) {
     });
   }
 
+  // --- wiring: the labels page's wires as soft tubes just in front of the LED channels ---
+  // they live outside `root`, which update() clears, and are rebuilt by setWiring
+  const wiringRoot = new THREE.Group();
+  wiringRoot.rotation.x = -Math.PI / 2;
+  wiringRoot.visible = false;
+  scene.add(wiringRoot);
+  const cssColor = (name) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#ff00ff');
+  let wireFront = null;
+  let wireFocus = null;
+
+  function clearWiring() {
+    for (const mesh of [...wiringRoot.children]) {
+      wiringRoot.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
+  }
+
+  // a tube along wall-space points, arched a little off the panel toward the viewer between its ends
+  function tube(points, y, radius, lift) {
+    const curve = new THREE.CatmullRomCurve3(
+      points.map((p, i) => new THREE.Vector3(p.x, y - lift * Math.sin((Math.PI * i) / (points.length - 1)), p.z)),
+    );
+    return new THREE.TubeGeometry(curve, Math.max(8, points.length * 2), radius, 6, false);
+  }
+
+  // cuts a polyline into dashes by length, for the runs on the FREE wire
+  function dashes(points, on, off) {
+    const out = [];
+    let cur = [points[0]];
+    let left = on;
+    let drawing = true;
+    for (let i = 1; i < points.length; i++) {
+      let a = points[i - 1];
+      const b = points[i];
+      let seg = Math.hypot(b.x - a.x, b.z - a.z);
+      while (seg > left) {
+        const t = left / seg;
+        const m = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+        if (drawing) {
+          cur.push(m);
+          out.push(cur);
+        }
+        cur = [m];
+        drawing = !drawing;
+        seg -= left;
+        a = m;
+        left = drawing ? on : off;
+      }
+      left -= seg;
+      if (drawing) cur.push(b);
+    }
+    if (drawing && cur.length > 1) out.push(cur);
+    return out;
+  }
+
+  function setWiring(paths) {
+    clearWiring();
+    if (!paths || !lattice) {
+      render();
+      return;
+    }
+    if (wireFront === null && hexTpl.led) {
+      // in front of the channels and the plate stacks alike
+      hexTpl.led.computeBoundingBox();
+      hexTpl.all.computeBoundingBox();
+      wireFront = Math.min(hexTpl.led.boundingBox.min.y, hexTpl.all.boundingBox.min.y);
+    }
+    const r = lattice.rho * 0.09;
+    const y = (wireFront ?? lattice.hexCenter.y) - r * 2;
+    const lift = lattice.rho * 0.6;
+    const groups = new Map(); // one merged mesh per colour and chain, so a chain can be picked out
+    const add = (key, cssVar, geometry) => {
+      if (!groups.has(key)) groups.set(key, { cssVar, chain: key.split(':')[1], list: [] });
+      groups.get(key).list.push(geometry);
+    };
+    for (const p of paths.power) add(`${p.which}:${p.chain.slice(1)}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
+    for (const sgl of paths.signals) {
+      const pieces = sgl.wire === 'FREE' ? dashes(sgl.points, lattice.rho * 0.35, lattice.rho * 0.22) : [sgl.points];
+      for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.key}`, `--w-m${sgl.key}`, tube(piece, y, r, lift));
+    }
+    for (const [key, g] of groups) {
+      const material = toon({ color: cssColor(g.cssVar), transparent: true });
+      const mesh = new THREE.Mesh(mergeGeometries(g.list), material);
+      g.list.forEach((geo) => geo.dispose());
+      mesh.userData = { key, cssVar: g.cssVar, chain: g.chain };
+      mesh.raycast = () => {};
+      wiringRoot.add(mesh);
+    }
+    focusWiring(wireFocus);
+  }
+
+  function focusWiring(id) {
+    wireFocus = id;
+    for (const mesh of wiringRoot.children) {
+      mesh.material.opacity = !id || `M${mesh.userData.chain}` === id ? 1 : 0.1;
+      mesh.material.depthWrite = mesh.material.opacity === 1;
+    }
+    applyShow();
+    render();
+  }
+
   // re-reads the CSS colours after the page switches theme
   function setTheme() {
     palette = readPalette();
+    for (const mesh of wiringRoot.children) mesh.material.color.copy(cssColor(mesh.userData.cssVar));
     materials.led.color.copy(palette.led);
     materials.led.emissive.copy(palette.led);
     materials.board.color.copy(palette.board);
@@ -989,5 +1095,5 @@ export async function createViewer(container, geo) {
     render();
   }
 
-  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, setTheme, wallPoint };
+  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
 }
