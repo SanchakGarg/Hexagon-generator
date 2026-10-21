@@ -131,11 +131,12 @@
           <button type="button" class="btn" id="restore-btn">restore all</button>
         </div>
         <div class="hex-card" id="hex-card" hidden aria-live="polite"></div>
-        <aside class="totals" aria-label="Totals">
-          <dl>
-            <div><dt>nodes</dt><dd id="total-nodes">–</dd></div>
-            <div><dt>LEDs</dt><dd id="total-leds">–</dd></div>
-          </dl>
+        <aside class="card totals" data-section="notes" aria-labelledby="notes-title">
+          <h2 id="notes-title">notes</h2>
+          <ul class="ruled">
+            <li><b id="total-nodes">–</b> nodes in all</li>
+            <li><b id="total-leds">–</b> LEDs in all</li>
+          </ul>
         </aside>
       </div>
     </main>
