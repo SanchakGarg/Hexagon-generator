@@ -20,6 +20,7 @@
 
   /* part colours, shared by the drawing, the keys and the 3D view */
   --c-hex: #a9dcc6;
+  --c-mcu: #d98be3;
   --c-led: #4a4560; /* dark channels read against the pale board */
   --c-3way: #93cdee;
   --c-2way: #bba8ef;
@@ -54,6 +55,7 @@
   --accent: #f08aa6;
 
   --c-hex: #8fc6af;
+  --c-mcu: #c98ad6;
   --c-led: #f0b440;
   --c-3way: #7fb7d6;
   --c-2way: #a595d9;
@@ -447,7 +449,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .key-2way { background: var(--c-2way); }
 .key-edge { background: var(--c-edge); }
 .key-normal { background: var(--c-hex); }
-.key-node { background: conic-gradient(var(--c-edge) 0 25%, var(--c-2way) 0 50%, var(--c-3way) 0 75%, var(--c-hex) 0); }
+.key-mcu { background: var(--c-mcu); border-radius: 50%; }
+.key-node { background: conic-gradient(var(--c-edge) 0 20%, var(--c-2way) 0 40%, var(--c-3way) 0 60%, var(--c-mcu) 0 80%, var(--c-hex) 0); }
 .key-led { background: var(--c-led); border-radius: 50%; }
 .key-edgeled { width: 16px; height: 6px; background: var(--c-led); }
 .key-label { width: auto; height: auto; border: 0; font-size: 0.95rem; line-height: 1; color: var(--accent); }

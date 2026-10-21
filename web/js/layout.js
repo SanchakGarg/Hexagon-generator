@@ -279,11 +279,13 @@ export function summarize(hexes, nodes, lat, edges = []) {
     edge: kind('edge'),
     '2way': kind('2-way'),
     '3way': kind('3-way'),
-    normal: hexes.length * lat.perHex.nodes + edges.length * lat.perEdge.nodes,
+    // every hexagon carries one MCU node at its centre; the rest of its own nodes, and an Edge's, are normal
+    mcu: hexes.length,
+    normal: hexes.length * (lat.perHex.nodes - 1) + edges.length * lat.perEdge.nodes,
     led: hexes.length * lat.perHex.leds,
     edgeled: edges.length * lat.perEdge.leds,
   };
-  counts.nodes = nodes.length + counts.normal;
+  counts.nodes = nodes.length + counts.mcu + counts.normal;
   counts.leds = counts.led + counts.edgeled;
   return { counts, hexagons: hexes.length, groups: countGroups(hexes, nodes) };
 }

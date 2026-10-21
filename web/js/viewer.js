@@ -14,19 +14,23 @@ function loadStl(url) {
   return stlCache.get(url);
 }
 
-// Bakes every <visual> of a URDF link into merged geometries: LED channels and everything else.
-async function buildTemplate(visuals) {
+// Bakes every <visual> of a URDF link into merged geometries: LED channels, the MCU node (the plate stack a
+// hexagon carries at its centre) and everything else.
+async function buildTemplate(visuals, isMcu = () => false) {
   const parts = await Promise.all(
     visuals.map(async (v) => {
       const geometry = (await loadStl(v.url)).clone();
       const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(v.rpy[0], v.rpy[1], v.rpy[2], 'ZYX'));
       geometry.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...v.xyz), rotation, ONE));
-      return { led: v.part.startsWith('led'), geometry, rgba: v.rgba, xyz: v.xyz };
+      const led = v.part.startsWith('led');
+      return { led, mcu: !led && isMcu(v), geometry, rgba: v.rgba, xyz: v.xyz };
     }),
   );
   const merge = (list) => (list.length ? mergeGeometries(list.map((p) => p.geometry)) : null);
   return {
-    body: merge(parts.filter((p) => !p.led)),
+    body: merge(parts.filter((p) => !p.led && !p.mcu)),
+    mcu: merge(parts.filter((p) => p.mcu)),
+    all: merge(parts.filter((p) => !p.led)),
     led: merge(parts.filter((p) => p.led)),
     rgba: parts.find((p) => !p.led)?.rgba ?? [0.4, 0.4, 0.4, 1],
     parts,
@@ -39,6 +43,7 @@ function readPalette() {
   const color = (name) => new THREE.Color(css.getPropertyValue(name).trim() || '#ff00ff');
   return {
     hex: color('--c-hex'),
+    mcu: color('--c-mcu'),
     led: color('--c-led'),
     select: color('--c-select'),
     board: color('--c-board'),
@@ -109,8 +114,11 @@ const inPlane = (q, degrees) => q.setFromAxisAngle(Y_AXIS, -THREE.MathUtils.degT
 
 // One scene, two cameras: a fixed orthographic front view ('2d') and an orbiting perspective view ('3d').
 export async function createViewer(container, geo) {
+  // the MCU node sits on the centre of the hexagon's corner frames
+  const frames = Object.values(geo.hexFrames);
+  const mid = { x: frames.reduce((t, f) => t + f.x, 0) / frames.length, z: frames.reduce((t, f) => t + f.z, 0) / frames.length };
   const [hexTpl, nodeTpl, edgeTpl] = await Promise.all([
-    buildTemplate(geo.hexVisuals),
+    buildTemplate(geo.hexVisuals, (v) => Math.hypot(v.xyz[0] - mid.x, v.xyz[2] - mid.z) < 0.05),
     buildTemplate(geo.nodeVisuals),
     buildTemplate(geo.edgeVisuals),
   ]);
@@ -142,6 +150,7 @@ export async function createViewer(container, geo) {
     edgeBody: toon({ color: 0xffffff }),
     led: toon({ color: palette.led, emissive: palette.led, emissiveIntensity: 0.25 }),
     nodeBody: toon({ color: 0xffffff }),
+    mcu: toon({ color: palette.mcu }),
     // the backboard and its raised sides are one material
     board: toon({ color: palette.board }),
   };
@@ -181,7 +190,7 @@ export async function createViewer(container, geo) {
       geometry.computeBoundingBox();
       return geometry.boundingBox.max.y + offset;
     };
-    return Math.max(maxY(hexTpl.body), maxY(hexTpl.led), maxY(nodeTpl.body, lat.nodeYOffset), maxY(edgeTpl.body, lat.edge.yOffset), maxY(edgeTpl.led, lat.edge.yOffset));
+    return Math.max(maxY(hexTpl.all), maxY(hexTpl.led), maxY(nodeTpl.body, lat.nodeYOffset), maxY(edgeTpl.body, lat.edge.yOffset), maxY(edgeTpl.led, lat.edge.yOffset));
   }
 
   // White backboard cut to the outline of the build, grown by the node-body radius so every node sits on it, with
@@ -307,7 +316,7 @@ export async function createViewer(container, geo) {
   scene.add(hoverRoot);
 
   let hexList = [];
-  let hexMeshes = { body: null, led: null };
+  let hexMeshes = { body: null, mcu: null, led: null };
   let hexParts = null; // { parts: [{ geometry, led, center, ring }], rings }
   let sessions = []; // one per hexagon that is coming out or settling back
   let hoverId = null;
@@ -349,7 +358,7 @@ export async function createViewer(container, geo) {
   function buildHexParts(hc) {
     const parts = hexTpl.parts.map((p) => {
       const box = new THREE.Box3().setFromBufferAttribute(p.geometry.attributes.position);
-      return { geometry: p.geometry, led: p.led, src: 'hex', layer: p.led ? 'led' : 'normal', center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
+      return { geometry: p.geometry, led: p.led, src: 'hex', layer: p.led ? 'led' : p.mcu ? 'mcu' : 'normal', center: box.getCenter(new THREE.Vector3()), d: Math.hypot(p.xyz[0] - hc.x, p.xyz[2] - hc.z) };
     });
     // 2 cm buckets: centre stack, inner channels, inner stacks, mid channels, outer stacks, outer channels
     const bucket = (d) => Math.round(d * 50);
@@ -373,7 +382,14 @@ export async function createViewer(container, geo) {
     const hc = lattice.hexCenter;
     const group = new THREE.Group();
     group.position.set(h.x - hc.x, 0, h.z - hc.z);
-    const items = hexParts.parts.map((part) => ({ mesh: partMesh(part, group, h.id), part, ring: part.ring, v: 0, target: 0 }));
+    const items = hexParts.parts.map((part) => ({
+      mesh: partMesh(part, group, h.id),
+      part,
+      ring: part.ring,
+      base: part.layer === 'mcu' ? palette.mcu.clone() : undefined,
+      v: 0,
+      target: 0,
+    }));
     hoverRoot.add(group);
     const session = { h, group, items, edgeItems: [], nodeItems: [], t0: performance.now(), leaveAt: null };
     attachEdges(session);
@@ -565,7 +581,7 @@ export async function createViewer(container, geo) {
     leaveMeshes = null;
     if (!leaving.length) return;
     leaveMeshes = {
-      body: instanced(hexTpl.body, materials.hexBody, leaving.length),
+      body: instanced(hexTpl.all, materials.hexBody, leaving.length),
       led: hexTpl.led && instanced(hexTpl.led, materials.led, leaving.length, { outline: false }),
     };
     leaving.forEach((_, i) => leaveMeshes.body.setColorAt(i, palette.hex));
@@ -599,7 +615,7 @@ export async function createViewer(container, geo) {
 
   // the static instance of a hexagon is hidden while its parts are out as separate meshes
   function writeHexes(now = performance.now()) {
-    const { body, led } = hexMeshes;
+    const { body, mcu, led } = hexMeshes;
     if (!body || !lattice) return;
     const hc = lattice.hexCenter;
     const out = new Set(sessions.map((s) => s.h.id));
@@ -612,11 +628,13 @@ export async function createViewer(container, geo) {
         if (pop) popAbout(h, pop, m);
       }
       body.setMatrixAt(i, m);
+      mcu?.setMatrixAt(i, m);
       led?.setMatrixAt(i, m);
       body.setColorAt(i, tint(h.id));
     });
     body.instanceMatrix.needsUpdate = true;
     if (body.instanceColor) body.instanceColor.needsUpdate = true;
+    if (mcu) mcu.instanceMatrix.needsUpdate = true;
     if (led) led.instanceMatrix.needsUpdate = true;
     writeEdges(now);
     writeNodes(now);
@@ -739,6 +757,7 @@ export async function createViewer(container, geo) {
     }
     hexMeshes = {
       body: instanced(hexTpl.body, materials.hexBody, hexes.length),
+      mcu: hexTpl.mcu && instanced(hexTpl.mcu, materials.mcu, hexes.length),
       led: hexTpl.led && instanced(hexTpl.led, materials.led, hexes.length, { outline: false }),
     };
     edgeMeshes = {
@@ -799,6 +818,7 @@ export async function createViewer(container, geo) {
 
   function applyShow() {
     if (hexMeshes.body) hexMeshes.body.visible = shown('normal');
+    if (hexMeshes.mcu) hexMeshes.mcu.visible = shown('mcu');
     if (hexMeshes.led) hexMeshes.led.visible = shown('led');
     if (edgeMeshes.body) edgeMeshes.body.visible = shown('normal');
     if (edgeMeshes.led) edgeMeshes.led.visible = shown('edgeled');
@@ -953,10 +973,12 @@ export async function createViewer(container, geo) {
     materials.led.color.copy(palette.led);
     materials.led.emissive.copy(palette.led);
     materials.board.color.copy(palette.board);
+    materials.mcu.color.copy(palette.mcu);
     ink.uniforms.color.value.copy(palette.outline);
     for (const session of sessions) {
       for (const item of session.nodeItems) item.base.copy(palette.node[item.kind]);
       // lifted parts carry their own material copies
+      for (const item of session.items) if (item.part.layer === 'mcu') item.base.copy(palette.mcu);
       for (const { mesh, part } of session.items) {
         if (part.led) mesh.material.color.copy(palette.led), mesh.material.emissive.copy(palette.led);
       }
