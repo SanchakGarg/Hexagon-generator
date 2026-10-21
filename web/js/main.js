@@ -11,10 +11,10 @@ const HINTS = {
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
 const PAGES = ['Configure', 'Parts list'];
-// LED strip: each channel holds 15 LEDs, the strip has 60 per metre and comes in 5 m rolls
-const LEDS_PER_CHANNEL = 15;
-const LEDS_PER_M = 60;
-const ROLL_M = 5;
+// LED channels are cut 27 cm long from 2 m lengths, so each length gives 7
+const CHANNEL_CM = 27;
+const LENGTH_CM = 200;
+const CHANNELS_PER_LENGTH = Math.floor(LENGTH_CM / CHANNEL_CM);
 const AUTOSAVE_MS = 5 * 60 * 1000;
 const SAVE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 const MAX_ZOOM = 40;
@@ -104,22 +104,18 @@ function renderPicks() {
 }
 
 // what to buy for the wall as it stands
-function renderBom(s, hexes, edges, rim) {
+function renderBom(s, hexes, rim) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
-  const pixels = s.counts.leds * LEDS_PER_CHANNEL;
-  const metres = pixels / LEDS_PER_M;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   const rows = [
-    [hexes.length, 'Hexagon panels'],
-    [edges.length, 'Edge pieces'],
-    [s.counts.edge, 'Edge nodes'],
-    [s.counts['2way'], '2-way nodes'],
-    [s.counts['3way'], '3-way nodes'],
+    [s.counts.nodes, 'Nodes'],
     [s.counts.nodes - skipped, 'Touch sensors', skipped ? `1 per node, ${skipped} left out` : '1 per node'],
-    [Math.ceil(pixels / (LEDS_PER_M * ROLL_M)), `LED strip rolls (${ROLL_M} m)`, `${pixels} LEDs · ${+metres.toFixed(2)} m at ${LEDS_PER_M}/m`],
+    [s.counts.leds, 'LED channels', `${CHANNEL_CM} cm each`],
+    [Math.ceil(s.counts.leds / CHANNELS_PER_LENGTH), `LED channel lengths (${LENGTH_CM / 100} m)`, `${CHANNELS_PER_LENGTH} channels cut from each`],
     [hexes.length, 'ESP32 Ethernet boards', '1 per hexagon · WT32-ETH01 works'],
   ];
+  $('bom-for').textContent = `for ${hexes.length} hexagon${hexes.length === 1 ? '' : 's'}`;
   if (boardOn && rim.length) rows.push([1, 'Backboard', `${formatLength(span('x'))} × ${formatLength(span('z'))}`]);
   // written like a note: what, then how many at the end of the line, with any working in small print beneath
   $('bom').replaceChildren(
@@ -201,7 +197,7 @@ function update() {
   const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   $('board-size').textContent = boardOn && rim.length ? `Board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
-  renderBom(s, hexes, edges, rim);
+  renderBom(s, hexes, rim);
 
   if (gridHexes.length === 0) {
     note.textContent = `Wall too small. One hexagon needs at least ${formatLength(2 * lattice.hw)} × ${formatLength(2 * lattice.hh)}.`;
@@ -448,10 +444,17 @@ const tabPlus = $('tab-plus');
 const tabMenu = $('tab-menu');
 let statusTimer = 0;
 
+// a toast at the foot of the page, gone after a few seconds
 function status(text) {
-  $('save-status').textContent = text;
+  const toast = $('toast');
+  toast.textContent = text;
+  toast.hidden = false;
+  // restart the pop-in when a second save lands while the first toast still shows
+  toast.classList.remove('show');
+  void toast.offsetWidth;
+  toast.classList.add('show');
   clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => ($('save-status').textContent = ''), 4000);
+  statusTimer = setTimeout(() => (toast.hidden = true), 3000);
 }
 
 const snapshot = () => ({

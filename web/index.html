@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hexagon Wall Planner</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script>
     // light unless dark was picked before; set before first paint so the page never flashes
     try {
@@ -163,7 +164,7 @@
             </div>
           </div>
           <div data-page-only="2">
-            <h2>Parts list</h2>
+            <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span></div>
             <div class="lines bom" id="bom"></div>
           </div>
         </aside>
@@ -171,9 +172,6 @@
     </main>
 
     <footer class="footer">
-      <div class="footer-saves">
-        <span class="status" id="save-status" role="status"></span>
-      </div>
       <div class="footer-pages">
         <span class="page-count" id="page-count">Page 1 of 2 · Configure</span>
         <button type="button" class="btn" id="back-btn" hidden>Back</button>
@@ -199,6 +197,8 @@
   </dialog>
 
   <div class="tooltip" id="tooltip" hidden></div>
+  <!-- a short note that pops up after a save -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -940,6 +940,28 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 .card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
 .bom { min-width: 250px; margin-top: 4px; }
+.bom-head { display: flex; align-items: baseline; gap: 10px; }
+.bom-head .for { color: var(--muted); font-size: 1.1rem; }
+
+/* save confirmation: a small taped note that pops up at the foot of the page */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  z-index: 20;
+  translate: -50% 0;
+  max-width: calc(100vw - 32px);
+  padding: 8px 18px 7px;
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink);
+  font-size: 1.15rem;
+  box-shadow: 3px 4px 0 var(--shadow);
+  border-left: 5px solid var(--ok);
+  pointer-events: none;
+}
+.toast[hidden] { display: none; }
+.toast.show { animation: note-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .bom .line { font-size: 1.1rem; line-height: 1.2; padding-block: 4px 3px; }
 
 /* --- footer: saves on the left, pages on the right --------------------------- */
@@ -954,9 +976,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   padding: 2px 4px 0 18px;
 }
 
-.footer-saves,
-.footer-pages { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.status { color: var(--muted); font-size: 1.05rem; }
+.footer-pages { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-left: auto; }
 .page-count { color: var(--muted); font-size: 1.15rem; }
 
 /* --- dialogs: an index card over a dimmed page --------------------------------- */
