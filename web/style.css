@@ -576,9 +576,19 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   flex: none;
   display: grid;
   place-items: center;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
+  margin-inline: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, scale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+.tab-state:not([data-state="saved"]):hover { background: color-mix(in srgb, var(--mint) 55%, transparent); scale: 1.15; }
+.tab-state[data-state="saved"] { cursor: default; }
 
 .tab-state svg { width: 12px; height: 12px; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .tab-state[data-state="saved"] svg { stroke: var(--ok); stroke-width: 2.2; }

@@ -15,6 +15,8 @@ const PAGES = ['Configure', 'Parts list'];
 const LEDS_PER_CHANNEL = 15;
 const LEDS_PER_M = 60;
 const ROLL_M = 5;
+const AUTOSAVE_MS = 5 * 60 * 1000;
+const SAVE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 const MAX_ZOOM = 40;
 const CLICK_SLOP = 4; // px a pointer may move and still count as a click
 
@@ -525,8 +527,9 @@ function refreshTabStates() {
     const state = tabState(t);
     if (!el || el.dataset.state === state) continue;
     el.dataset.state = state;
-    el.title = STATES[state][0];
-    el.setAttribute('aria-label', STATES[state][0]);
+    const label = state === 'saved' ? STATES[state][0] : `${STATES[state][0]} · click or press ${SAVE_KEYS} to save`;
+    el.title = label;
+    el.setAttribute('aria-label', label);
     el.innerHTML = STATES[state][1];
   }
 }
@@ -564,9 +567,11 @@ function tabElement(t) {
   el.setAttribute('role', 'tab');
   const name = document.createElement('span');
   name.className = 'tab-name';
-  const state = document.createElement('span');
+  // the mark after the name doubles as the tab's save button
+  const state = document.createElement('button');
+  state.type = 'button';
   state.className = 'tab-state';
-  state.setAttribute('role', 'img');
+  state.tabIndex = -1;
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'tab-close';
@@ -595,6 +600,11 @@ function tabElement(t) {
   close.addEventListener('click', (e) => {
     e.stopPropagation();
     closeTab(t);
+  });
+  state.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activate(t);
+    save();
   });
   return el;
 }
@@ -669,18 +679,17 @@ function rename(t) {
 }
 
 // stores the tab on screen under a name; returns why it could not, or '' once saved
-function saveAs(name) {
-  const t = active;
+function saveAs(name, t = active, how = 'Saved') {
   const saves = loadSaves();
   if (saves.some((x) => x.name === name && x.id !== t.saveId)) return `There's already a save called “${name}”. Pick another name.`;
   const id = t.saveId ?? `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const config = snapshot();
+  const config = t === active ? snapshot() : t.config;
   if (!storeSaves([{ id, name, savedAt: Date.now(), config }, ...saves.filter((x) => x.id !== id)])) {
     return 'This browser would not store it (private window or storage blocked).';
   }
   Object.assign(t, { name, saveId: id, savedName: name, savedConfig: JSON.stringify(config) });
   renderTabs();
-  status(`Saved “${name}”`);
+  status(`${how} “${name}”`);
   return '';
 }
 
@@ -699,7 +708,11 @@ function save() {
   if (error) askName(error);
 }
 
-$('save-btn').addEventListener('click', save);
+// every few minutes, tabs saved before have their changes written to the same save; a tab never saved waits for
+// its first save to be given a name
+setInterval(() => {
+  for (const t of tabs) if (t.saveId && tabState(t) === 'pending') saveAs(t.name, t, 'Autosaved');
+}, AUTOSAVE_MS);
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
