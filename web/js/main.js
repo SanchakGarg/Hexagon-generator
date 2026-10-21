@@ -179,8 +179,8 @@ function renderBom(s, hexes, rim) {
 
   const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
   const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
-  // written like a note: what, then the amount at the end of the line, with the working in small print beneath
-  const line = (cls, label, note, amount) => {
+  // written like a note in three columns: what (with the working in small print beneath), how many, and the amount
+  const line = (cls, label, note, qty, amount) => {
     const p = document.createElement('p');
     p.className = cls;
     const what = document.createElement('span');
@@ -190,24 +190,26 @@ function renderBom(s, hexes, rim) {
       small.textContent = note;
       what.append(small);
     }
+    const n = document.createElement('span');
+    n.className = 'qty';
+    n.textContent = qty;
     const b = document.createElement('b');
     b.textContent = amount;
-    p.append(what, b);
+    p.append(what, n, b);
     return p;
   };
-  const out = [];
+  const out = [line('line cols', 'Item', '', 'Qty', 'Price')];
   for (const sec of sections) {
-    out.push(line('line section', sec.title, sec.note, rupees(sum(sec.items))));
+    out.push(line('line section', sec.title, sec.note, '', rupees(sum(sec.items))));
     for (const i of sec.items) {
-      const qty = i.qty == null ? '--' : i.qty;
-      const working = [i.rate == null ? `${qty} × --` : `${qty} × ${rupees(i.rate)}`, i.note].filter(Boolean).join(' · ');
+      const working = [`${i.rate == null ? '--' : rupees(i.rate)} each`, i.note].filter(Boolean).join(' · ');
       const c = cost(i);
-      out.push(line('line item', i.label, working, c == null ? '--' : rupees(c)));
+      out.push(line('line item', i.label, working, i.qty ?? '--', c == null ? '--' : rupees(c)));
     }
   }
   const all = sections.flatMap((x) => x.items);
   const unpriced = all.filter((i) => cost(i) == null).length;
-  out.push(line('line grand', 'Total', unpriced ? `${unpriced} item${unpriced === 1 ? '' : 's'} not priced yet` : '', rupees(sum(all))));
+  out.push(line('line grand', 'Total', unpriced ? `${unpriced} item${unpriced === 1 ? '' : 's'} not priced yet` : '', '', rupees(sum(all))));
   $('bom').replaceChildren(...out);
 }
 
