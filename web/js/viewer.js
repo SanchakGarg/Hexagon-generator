@@ -1065,7 +1065,7 @@ export async function createViewer(container, geo) {
   function focusWiring(id) {
     wireFocus = id;
     for (const mesh of wiringRoot.children) {
-      mesh.material.opacity = !id || `M${mesh.userData.chain}` === id ? 1 : 0.1;
+      mesh.material.opacity = !id || `M${mesh.userData.chain}` === id ? 1 : 0.22;
       mesh.material.depthWrite = mesh.material.opacity === 1;
     }
     applyShow();

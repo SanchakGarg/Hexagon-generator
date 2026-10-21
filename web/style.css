@@ -910,7 +910,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
-  transition: opacity 0.2s, stroke-width 0.15s;
 }
 .wiring .sheath { stroke: var(--page); stroke-linecap: butt; opacity: 0.9; vector-effect: none; pointer-events: none; }
 .wiring .pwr { stroke-width: 1.1px; }
@@ -925,13 +924,15 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring .sig:hover,
 .wiring .pwr:hover { stroke-width: 3.6px; }
 .wiring .conn:hover { stroke-width: 5px; }
-.wiring.focus [data-chain]:not(.lit) { opacity: 0.1; }
+/* a picked chain stays bright, the rest fade back but stay readable */
+.wiring.focus [data-chain]:not(.lit):not(.sheath) { opacity: 0.22; }
 .hide-wiring .wiring { display: none; }
 
 /* the wiring key in the notes card */
 .labels-key { width: 280px; }
 .labels-key .help { margin: 0; font-size: 0.95rem; line-height: 1.2; }
-.wkey { display: grid; gap: 0; margin-top: 4px; }
+.wkey { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 4px; margin-top: 4px; }
+.wkey .wires, .wkey .help { grid-column: 1 / -1; }
 .wkey .chain { display: flex; align-items: center; gap: 8px; margin: 0; line-height: 1.5; cursor: default; border-radius: 4px; padding: 0 4px; }
 .wkey .chain:hover { background: color-mix(in srgb, var(--w) 14%, transparent); }
 .wkey .chain b { color: var(--w); font-family: var(--mono); font-size: 0.8rem; min-width: 2.2em; }

@@ -506,10 +506,12 @@ function focusChain(id) {
   if (id) for (const el of svg.querySelectorAll(`.wiring [data-chain="${id}"]`)) el.classList.add('lit');
   viewer?.focusWiring(id);
 }
-for (const row of document.querySelectorAll('#wiring-key [data-chain]')) {
-  row.addEventListener('pointerenter', () => focusChain(row.dataset.chain));
-  row.addEventListener('pointerleave', () => focusChain(null));
+// moving from one row to the next swaps the chain straight over; only leaving the key clears it
+const wiringKey = $('wiring-key');
+for (const row of wiringKey.querySelectorAll('[data-chain]')) {
+  row.addEventListener('pointerenter', () => row.dataset.chain !== focusedChain && focusChain(row.dataset.chain));
 }
+wiringKey.addEventListener('pointerleave', () => focusChain(null));
 
 // --- pages: configure the wall, label its nodes, then the parts list ----------------------------
 
