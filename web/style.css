@@ -41,9 +41,9 @@
   --w-l6: #d6458f;
   /* touch sensor wires, by the node that collects them */
   --t-m: #b5179e;
-  --t-3: #1c7ed6;
-  --t-6: #e8590c;
-  --t-9: #2b8a3e;
+  --t-1: #1c7ed6;
+  --t-2: #e8590c;
+  --t-3: #2b8a3e;
   --hl: 80%; /* highlighter strength */
 
   --hand: "Patrick Hand", "Segoe Print", "Bradley Hand", system-ui, sans-serif;
@@ -93,9 +93,9 @@
   --w-l5: #6fd48c;
   --w-l6: #ff85c0;
   --t-m: #f06fd0;
-  --t-3: #74b9ff;
-  --t-6: #ff9f5a;
-  --t-9: #69db7c;
+  --t-1: #74b9ff;
+  --t-2: #ff9f5a;
+  --t-3: #69db7c;
 }
 
 * { box-sizing: border-box; }
@@ -944,9 +944,9 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 /* strip wiring or LED channels, on the labels page; on a phone it sits under the 2D/3D switch */
 /* touch sensors view */
 .t-m { --w: var(--t-m); }
+.t-1 { --w: var(--t-1); }
+.t-2 { --w: var(--t-2); }
 .t-3 { --w: var(--t-3); }
-.t-6 { --w: var(--t-6); }
-.t-9 { --w: var(--t-9); }
 .wiring .tw { stroke: var(--w); stroke-width: 2.4px; }
 .wiring .tdot { fill: var(--w); stroke: var(--page); stroke-width: 1px; pointer-events: none; }
 .wiring .tring { stroke: var(--w); stroke-width: 2px; }

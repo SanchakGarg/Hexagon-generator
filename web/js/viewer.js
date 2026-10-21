@@ -1043,6 +1043,8 @@ export async function createViewer(container, geo) {
     });
   }
 
+  const touchVar = (g) => (g === 'M' ? '--t-m' : `--t-${g.slice(1)}`);
+
   function setWiring(paths, arrows = null, sensors = null) {
     clearWiring();
     if ((!paths && !arrows && !sensors) || !lattice) {
@@ -1065,11 +1067,11 @@ export async function createViewer(container, geo) {
     };
     for (const a of arrows ?? []) for (const g of arrowGeometries(a, y, r * 3.2)) add(`arrow:L${a.key}`, `--w-l${a.key}`, g);
     // touch sensor wires, and a ring round each node that takes its own sensor
-    for (const t of sensors?.runs ?? []) add(`touch:${t.group}`, `--t-${t.group.slice(1).toLowerCase()}`, tube(t.points, y, r * 1.1, lift));
+    for (const t of sensors?.runs ?? []) add(`touch:${t.group}`, touchVar(t.group), tube(t.points, y, r * 1.1, lift));
     for (const ring of sensors?.rings ?? []) {
       const torus = new THREE.TorusGeometry(lattice.rho * 1.3, r, 6, 32);
       torus.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(ring.x, y, ring.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), ONE));
-      add(`touch:${ring.group}`, `--t-${ring.group.slice(1).toLowerCase()}`, torus);
+      add(`touch:${ring.group}`, touchVar(ring.group), torus);
     }
     for (const p of paths?.power ?? []) add(`${p.which}:${p.chain}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
     for (const sgl of paths?.signals ?? []) {

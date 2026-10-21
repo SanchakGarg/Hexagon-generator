@@ -111,13 +111,13 @@ function arrowsSvg(arrows, lat, y) {
 
 // The touch sensors view: each node's sensor wire runs to the node that collects it, in that node's colour, with a
 // dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own.
-const groupClass = (g) => `t-${g.slice(1).toLowerCase()}`;
+export const groupClass = (g) => (g === 'M' ? 't-m' : `t-${g.slice(1)}`);
 function sensorsSvg(s, lat, y) {
   const out = ['<g class="wiring touch">'];
   for (const r of s.runs) {
     const attrs = `data-chain="${r.group}" data-hex="${r.hexId}"`;
     const route = [r.from, ...r.via, r.to].join(' → ');
-    const tip = `Touch sensor at ${r.from}\nwired ${route}`;
+    const tip = `${r.group} · touch sensor at ${r.from}\nwired ${route}`;
     out.push(`<path class="hit" ${attrs} d="${line(r.points, y)}" data-tip="${esc(tip)}"/>`);
     out.push(`<path class="tw ${groupClass(r.group)}" ${attrs} d="${line(r.points, y)}"/>`);
   }
@@ -136,7 +136,7 @@ function sensorsSvg(s, lat, y) {
     out.push(`<circle class="tdot ${groupClass(d.group)}" data-chain="${d.group}" data-hex="${d.hexId}" cx="${fmt(d.x)}" cy="${fmt(y(d.z))}" r="${fmt(s.lane * 1.3)}"/>`);
   }
   for (const r of s.rings) {
-    const tip = `Touch sensor at ${r.node}\nwired straight into ${r.node}`;
+    const tip = `${r.group} · touch sensor at ${r.node}\nwired straight into ${r.node}`;
     out.push(`<circle class="tring ${groupClass(r.group)}" data-chain="${r.group}" data-hex="${r.hexId}" cx="${fmt(r.x)}" cy="${fmt(y(r.z))}" r="${fmt(lat.rho * 1.3)}" data-tip="${esc(tip)}"/>`);
   }
   out.push('</g>');

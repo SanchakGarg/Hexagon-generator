@@ -208,6 +208,8 @@ export function strandPaths({ chains, channels }, lat) {
 const INNER = [90, 30, 330, 270, 210, 150];
 const HUB_OF_CORNER = { 90: 120, 150: 120, 30: 0, 330: 0, 270: 240, 210: 240 };
 const EDGE_ROUTE = { 60: [90, 120], 180: [210, 240], 300: [330, 0] }; // side → [corner, hub]
+// the four touch sensor groups, named by the node that collects them: M, then T1–T3 for outer nodes 3, 6 and 9
+const TOUCH_GROUP = { 3: 'T1', 6: 'T2', 9: 'T3' };
 
 export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) {
   const R = lat.R;
@@ -231,24 +233,24 @@ export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) 
     const add = (group, stops) => {
       if (stops.every(Boolean) && has(stops[0])) runs.push({ group, hexId: h.id, stops });
     };
-    if (has(M)) selfs.push({ group: 'TM', hexId: h.id, node: M });
-    for (const a of INNER) add('TM', [at(h, R / 2, a), M]);
+    if (has(M)) selfs.push({ group: 'M', hexId: h.id, node: M });
+    for (const a of INNER) add('M', [at(h, R / 2, a), M]);
     for (const a of [0, 120, 240]) {
       const n = hub(a);
-      if (has(n)) selfs.push({ group: `T${n.label}`, hexId: h.id, node: n });
+      if (has(n)) selfs.push({ group: TOUCH_GROUP[n.label], hexId: h.id, node: n });
     }
     for (const [corner, hubAngle] of Object.entries(HUB_OF_CORNER)) {
       const c = at(h, R, +corner);
       const target = hub(hubAngle);
       // a shared corner is wired by the hexagon that owns it
-      if (c && target && c.hexId === h.id) add(`T${target.label}`, [c, target]);
+      if (c && target && c.hexId === h.id) add(TOUCH_GROUP[target.label], [c, target]);
     }
     for (const e of edges.filter((x) => x.hexId === h.id)) {
       const route = EDGE_ROUTE[e.side];
       if (!route) continue;
       const plate = near((e.x + e.tipX) / 2, (e.z + e.tipZ) / 2);
       const target = hub(route[1]);
-      if (target) add(`T${target.label}`, [plate, at(h, R, route[0]), target]);
+      if (target) add(TOUCH_GROUP[target.label], [plate, at(h, R, route[0]), target]);
     }
   }
   return { runs, selfs };
