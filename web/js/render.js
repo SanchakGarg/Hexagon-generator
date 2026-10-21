@@ -50,7 +50,7 @@ function stripPoints(x1, y1, x2, y2, halfWidth) {
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -120,6 +120,14 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const e of edges) parts.push(`<polygon class="edge" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
   for (const n of nodes) {
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
+  }
+
+  // labels page: a tiny label at the centre of every node, the same set in each hexagon
+  if (labels) {
+    const fs = lat.rho * 0.9;
+    for (const n of labels) {
+      parts.push(`<text class="nlabel" x="${fmt(n.x)}" y="${fmt(y(n.z))}" font-size="${fmt(fs)}">${esc(n.label ?? '')}</text>`);
+    }
   }
 
   // parts page: every node can be picked; picked ones march, ones left without a touch sensor are struck through

@@ -1,5 +1,5 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
@@ -8,9 +8,12 @@ const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
   '2d': 'Hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
+  labels: 'Every hexagon labels its nodes the same way · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
-const PAGES = ['Configure', 'Parts list'];
+const PAGES = ['Configure', 'Node labels', 'Parts list'];
+const LABELS_PAGE = 2;
+const PARTS_PAGE = 3;
 // LED channels are cut 27 cm long from 2 m lengths, so each length gives 7; each channel holds 15 LEDs of a
 // 60-per-metre WS2812B strip that comes in 5 m rolls
 const CHANNEL_CM = 27;
@@ -109,7 +112,7 @@ function resetZoom() {
 // selection and exclusion live in a strip on the drawing, shown only while there is something to act on; on the
 // parts page the same strip picks nodes and leaves their touch sensors out
 function renderPicks() {
-  const parts = page === 2;
+  const parts = page === PARTS_PAGE;
   const present = new Set(allNodes.map((n) => n.key));
   const sel = parts ? nodePicks.size : gridHexes.filter((h) => selected.has(keyOf(h))).length;
   const exc = parts ? [...noSensor].filter((k) => present.has(k)).length : gridHexes.filter((h) => excluded.has(keyOf(h))).length;
@@ -121,7 +124,8 @@ function renderPicks() {
   restoreBtn.textContent = parts ? 'Add sensors back' : 'Restore all';
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
-  pickBar.hidden = sel === 0 && exc === 0;
+  // the labels page only shows, so nothing is picked there
+  pickBar.hidden = page === LABELS_PAGE || (sel === 0 && exc === 0);
   hint.classList.toggle('pushed', !pickBar.hidden);
 }
 
@@ -246,8 +250,10 @@ function update() {
   allNodes = gridHexes.length ? placeAllNodes(hexes, nodes, edges, lattice, gridHexes[0]) : [];
   const present = new Set(allNodes.map((n) => n.key));
   for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
-  const picks = page === 2 ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks });
+  const picks = page === PARTS_PAGE ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
+  const labels = page === LABELS_PAGE ? allNodes : null;
+  svg.classList.toggle('labelling', !!labels);
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
@@ -396,7 +402,7 @@ function toggleSelect(id) {
 }
 
 excludeBtn.addEventListener('click', () => {
-  if (page === 2) {
+  if (page === PARTS_PAGE) {
     for (const key of nodePicks) noSensor.add(key);
     nodePicks.clear();
     update();
@@ -413,7 +419,7 @@ clearBtn.addEventListener('click', () => {
   update();
 });
 restoreBtn.addEventListener('click', () => {
-  if (page === 2) noSensor.clear();
+  if (page === PARTS_PAGE) noSensor.clear();
   else excluded.clear();
   update();
 });
@@ -429,7 +435,7 @@ function setView(next) {
   }
   // the overlay leaves as the camera starts to fly and comes back once it has landed on the front view
   if (next === '3d') svg.toggleAttribute('hidden', true);
-  hint.textContent = page === 2 ? HINTS.parts : HINTS[next];
+  hint.textContent = hintFor(next);
   hover(null);
   viewer.setMode(next).then(() => {
     if (view === '2d') svg.toggleAttribute('hidden', false);
@@ -486,11 +492,12 @@ boardToggle.addEventListener('click', (e) => {
   update();
 });
 
-// --- pages: configure the wall, then the parts list ----------------------------
+// --- pages: configure the wall, label its nodes, then the parts list ----------------------------
 
 const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
+const hintFor = (v) => (page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS.labels : HINTS[v]);
 
 function setPage(next) {
   page = next;
@@ -503,7 +510,7 @@ function setPage(next) {
   nodePicks.clear();
   hover(null);
   // until the meshes are in, the hint says they are loading
-  if (viewer) hint.textContent = page === 2 ? HINTS.parts : HINTS[view];
+  if (viewer) hint.textContent = hintFor(view);
   if (lattice) update();
 }
 backBtn.addEventListener('click', () => setPage(page - 1));
@@ -933,8 +940,8 @@ svg.addEventListener('pointerup', () => {
   svg.classList.remove('panning');
   if (!was || was.moved) return;
   // pointer capture retargets events to the svg, so use the element pressed on
-  if (page === 2) {
-    const key = nodeAt(was.point);
+  if (page !== 1) {
+    const key = page === PARTS_PAGE && nodeAt(was.point);
     if (key) togglePick(key);
     return;
   }
@@ -966,7 +973,7 @@ svg.addEventListener('pointermove', (e) => {
     }
     return;
   }
-  hover(page === 2 ? null : hexAt(wallFromSvg(e)));
+  hover(page !== 1 ? null : hexAt(wallFromSvg(e)));
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -992,7 +999,7 @@ function wire3d(canvas) {
   });
   canvas.addEventListener('pointermove', (e) => {
     if (view !== '3d' || e.buttons) return;
-    hover(page === 2 ? null : hexAt(viewer.wallPoint(e.clientX, e.clientY)));
+    hover(page !== 1 ? null : hexAt(viewer.wallPoint(e.clientX, e.clientY)));
   });
   canvas.addEventListener('pointerup', (e) => {
     const p = press;
@@ -1000,8 +1007,8 @@ function wire3d(canvas) {
     if (view !== '3d' || !p || p.button !== 0) return;
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_SLOP) return;
     const point = viewer.wallPoint(e.clientX, e.clientY);
-    if (page === 2) {
-      const key = nodeAt(point);
+    if (page !== 1) {
+      const key = page === PARTS_PAGE && nodeAt(point);
       if (key) togglePick(key);
       return;
     }
@@ -1053,6 +1060,7 @@ async function start() {
         const dz = v.xyz[2] - lattice.hexCenter.z;
         return { dx, dz, mcu: Math.hypot(dx, dz) < 0.05 };
       });
+    labelHexNodes(lattice.hexNodes);
   } catch (err) {
     $('note').textContent = `Could not read the URDF files: ${err.message}`;
     return;

@@ -859,7 +859,25 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 /* hidden layers; hexagons stay clickable through the wall-point hit test */
 .hide-normal.hide-led .hex:not(.ghost):not(.selected) polygon { visibility: hidden; }
-.hide-labels .hex text { display: none; }
+.hide-labels .hex text,
+.hide-labels .nlabel { display: none; }
+
+/* node labels: tiny, centred on each node, with a paper halo to read over the meshes */
+.nlabel {
+  fill: var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: var(--page);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+/* the hexagon names would sit on the MCU labels */
+.labelling .hex text { display: none; }
 .hide-3way .node-3way,
 .hide-2way .node-2way,
 .hide-edge .node-edge,
@@ -935,8 +953,9 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .card[data-section="nodes"] { --tape: var(--lilac); }
 
 /* one page at a time */
-.app[data-page="1"] [data-page-only="2"],
-.app[data-page="2"] [data-page-only="1"] { display: none; }
+.app:not([data-page="1"]) [data-page-only="1"],
+.app:not([data-page="2"]) [data-page-only="2"],
+.app:not([data-page="3"]) [data-page-only="3"] { display: none; }
 
 .card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
 .bom { min-width: 330px; margin-top: 4px; }

@@ -13,6 +13,11 @@ const TURN_ORDER = ['11', '22', '12', '21', '31', '32'];
 // the hexagon holds by node-5. That node-1 runs along the side, so the Edge lies on it.
 const EDGE_FRAME = 'edge-1';
 const BORROWED_SIDES = [60, 180, 300];
+// Node labels repeat in every hexagon: M for its MCU node, 1, 2, … for its other built-in nodes clockwise from the
+// top, a–f for the corners clockwise from the top one (a shared corner takes the label from the hexagon that owns
+// it), and E1–E3 for the plate stack of an Edge on each side the hexagon borrows.
+const CORNER_LABELS = { 90: 'a', 30: 'b', 330: 'c', 270: 'd', 210: 'e', 150: 'f' };
+const EDGE_LABELS = { 60: 'E1', 180: 'E2', 300: 'E3' };
 
 const rad = (d) => (d * Math.PI) / 180;
 const norm = (d) => ((d % 360) + 360) % 360;
@@ -235,6 +240,7 @@ export function buildEdges(hexes, nodes, lat) {
       const edge = {
         id: `E${edges.length + 1}`,
         hexId: h.id,
+        side,
         nodeId: n.id,
         edgeFrame: EDGE_FRAME,
         nodeFrame: nearestFrame(lat.nodeAngles, n.rotation, angle),
@@ -290,17 +296,33 @@ export function summarize(hexes, nodes, lat, edges = []) {
   return { counts, hexagons: hexes.length, groups: countGroups(hexes, nodes) };
 }
 
+// Labels a hexagon's built-in nodes: the MCU node M, the rest numbered clockwise from straight up.
+export function labelHexNodes(hexNodes) {
+  const clockwise = (n) => norm(90 - deg(Math.atan2(n.dz, n.dx)));
+  const rest = hexNodes.filter((n) => !n.mcu).sort((a, b) => clockwise(a) - clockwise(b));
+  for (const n of hexNodes) if (n.mcu) n.label = 'M';
+  rest.forEach((n, i) => (n.label = String(i + 1)));
+  return hexNodes;
+}
+
 // Every node on the wall at its wall position: the ones built into hexagons (from the hexagon model's plate stacks)
 // and Edges, and the joining nodes. Keys are measured from the first grid hexagon, which moves with the whole grid,
 // so a pick survives excluding and restoring hexagons.
 export function placeAllNodes(hexes, nodes, edges, lat, origin) {
   const out = [];
   for (const h of hexes) {
-    for (const n of lat.hexNodes) out.push({ x: h.x + n.dx, z: h.z + n.dz, kind: n.mcu ? 'mcu' : 'normal', hexId: h.id });
+    for (const n of lat.hexNodes) {
+      out.push({ x: h.x + n.dx, z: h.z + n.dz, kind: n.mcu ? 'mcu' : 'normal', hexId: h.id, label: n.label });
+    }
   }
   // an Edge's plate stack sits halfway along it
-  for (const e of edges) out.push({ x: (e.x + e.tipX) / 2, z: (e.z + e.tipZ) / 2, kind: 'normal', hexId: e.hexId });
-  for (const n of nodes) out.push({ x: n.x, z: n.z, kind: n.kind.replace('-', ''), hexId: n.hexId });
+  for (const e of edges) {
+    out.push({ x: (e.x + e.tipX) / 2, z: (e.z + e.tipZ) / 2, kind: 'normal', hexId: e.hexId, label: EDGE_LABELS[e.side] });
+  }
+  for (const n of nodes) {
+    const own = n.joints.find((j) => j.hexId === n.hexId);
+    out.push({ x: n.x, z: n.z, kind: n.kind.replace('-', ''), hexId: n.hexId, label: CORNER_LABELS[lat.cornerOf[own.hexFrame]] });
+  }
   for (const n of out) n.key = `${Math.round((n.x - origin.x) * 1000)},${Math.round((n.z - origin.z) * 1000)}`;
   return out;
 }
