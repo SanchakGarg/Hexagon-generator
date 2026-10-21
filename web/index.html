@@ -200,14 +200,30 @@
                 <p class="chain w-5" data-chain="L5"><i class="swatch"></i><b>L5</b></p>
                 <p class="chain w-6" data-chain="L6"><i class="swatch"></i><b>L6</b></p>
               </div>
-              <div class="wkey" data-wview-only="wiring">
-                <div class="wires">
-                  <span class="pin-5v"><i class="swatch"></i>5V</span>
-                  <span class="pin-gnd"><i class="swatch"></i>GND</span>
-                  <span class="pin-sig"><i class="swatch"></i>SIG</span>
-                  <span class="pin-sig"><i class="swatch free"></i>FREE</span>
-                </div>
-                <p class="help">A coloured bar marks a channel's IN end, where its data enters; a dotted ring is a SIG↔FREE switch. With a neighbour in place of an Edge, the turn is at its node and the chain stops at the corner.</p>
+              <div class="conn-key" data-wview-only="wiring">
+                <h2 class="key-head">Connectors</h2>
+                <p class="help">A 2510 4-pin connector at each end of every channel, pins 1–4 in the same order at both ends.</p>
+                <!-- one channel, IN on the left: SIG runs through the LEDs, FREE runs past them -->
+                <svg class="conn-diagram" viewBox="0 0 280 118" role="img" aria-label="A channel with a 4-pin connector at each end: 5V, SIG, FREE and GND. SIG runs through the LEDs from DIN to DOUT; FREE runs straight past them.">
+                  <text class="cap" x="58" y="11" text-anchor="middle">IN · DIN</text>
+                  <text class="cap" x="222" y="11" text-anchor="middle">OUT · DOUT</text>
+                  <rect class="body" x="66" y="18" width="148" height="92" rx="5"/>
+                  <g class="pins">
+                    <text x="4" y="34">1 5V</text><text x="4" y="56">2 SIG</text><text x="4" y="78">3 FREE</text><text x="4" y="100">4 GND</text>
+                  </g>
+                  <rect class="plug" x="50" y="20" width="16" height="88" rx="2"/>
+                  <rect class="plug" x="214" y="20" width="16" height="88" rx="2"/>
+                  <line class="v5" x1="58" y1="30" x2="222" y2="30"/>
+                  <line class="gnd" x1="58" y1="96" x2="222" y2="96"/>
+                  <line class="free" x1="58" y1="74" x2="222" y2="74"/>
+                  <path class="sig" d="M58 52 H222"/>
+                  <g class="leds"><rect x="86" y="45" width="14" height="14" rx="2"/><rect x="122" y="45" width="14" height="14" rx="2"/><rect x="158" y="45" width="14" height="14" rx="2"/></g>
+                  <path class="chev" d="M107 48 l5 4 -5 4 M143 48 l5 4 -5 4 M179 48 l5 4 -5 4"/>
+                  <g class="dots"><circle cx="58" cy="30" r="2.6"/><circle cx="58" cy="52" r="2.6"/><circle cx="58" cy="74" r="2.6"/><circle cx="58" cy="96" r="2.6"/><circle cx="222" cy="30" r="2.6"/><circle cx="222" cy="52" r="2.6"/><circle cx="222" cy="74" r="2.6"/><circle cx="222" cy="96" r="2.6"/></g>
+                  <text class="note" x="236" y="56">→ next</text>
+                  <text class="note" x="236" y="78">bypass</text>
+                </svg>
+                <p class="help">At a turn (E1–E3, or a neighbour's 3, 6, 9) a chain's DOUT SIG is jumped to pin 3 FREE of its partner channel, rides back past the LEDs, and is jumped to that channel's DIN SIG again at the inner node: the dotted rings. 5V and GND run through every connector. A coloured bar on the drawing marks a channel's IN end.</p>
               </div>
             </div>
             <div data-page-only="3">

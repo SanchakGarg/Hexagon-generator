@@ -508,20 +508,22 @@ boardToggle.addEventListener('click', (e) => {
 // the drawing picks out just that chain in just that hexagon
 let focusedChain = null;
 let focusedHex = null;
+// a chain, a hexagon, or one chain in one hexagon; the rest of the wiring fades back
 function focusChain(id, hexId = null) {
   focusedChain = id;
-  focusedHex = id ? hexId : null;
+  focusedHex = hexId;
   const group = svg.querySelector('.wiring');
-  group?.classList.toggle('focus', !!id);
+  group?.classList.toggle('focus', !!(id || hexId));
   for (const el of svg.querySelectorAll('.wiring .lit')) el.classList.remove('lit');
-  const only = focusedHex ? `[data-hex="${focusedHex}"]` : '';
-  if (id) for (const el of svg.querySelectorAll(`.wiring [data-chain="${id}"]${only}`)) el.classList.add('lit');
-  viewer?.focusWiring(focusedHex ? null : id);
+  const sel = `${id ? `[data-chain="${id}"]` : '[data-chain]'}${hexId ? `[data-hex="${hexId}"]` : ''}`;
+  if (id || hexId) for (const el of svg.querySelectorAll(`.wiring ${sel}`)) el.classList.add('lit');
+  viewer?.focusWiring(hexId ? null : id);
 }
-function focusWire(target) {
+// on a wire: that chain in that hexagon; elsewhere inside a hexagon: all of that hexagon's wiring
+function focusWire(target, point) {
   const wire = target?.closest?.('.wiring [data-chain]');
   const chain = wire?.dataset.chain ?? null;
-  const hexId = wire?.dataset.hex ?? null;
+  const hexId = wire?.dataset.hex ?? hexAt(point, { edges: false });
   if (chain !== focusedChain || hexId !== focusedHex) focusChain(chain, hexId);
 }
 // the labels page shows the strip wiring or the LED channels' data direction
@@ -1028,7 +1030,7 @@ svg.addEventListener('pointermove', (e) => {
     return;
   }
   hover(page !== 1 ? null : hexAt(wallFromSvg(e), { edges: false }));
-  if (page === LABELS_PAGE) focusWire(e.target);
+  if (page === LABELS_PAGE) focusWire(e.target, wallFromSvg(e));
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;

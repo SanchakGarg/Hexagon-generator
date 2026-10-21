@@ -70,7 +70,7 @@ function wiringSvg(w, y) {
   for (const c of w.connectors) {
     const a = { x: c.x + c.n.x * c.half, z: c.z + c.n.z * c.half };
     const b = { x: c.x - c.n.x * c.half, z: c.z - c.n.z * c.half };
-    const tip = `Channel ${c.channel} · ${c.end} @ ${c.node}\npins: 5V · SIG · FREE · GND`;
+    const tip = `Channel ${c.channel} · ${c.end} (${c.end === 'IN' ? 'DIN' : 'DOUT'}) @ ${c.node}\n2510 4-pin: 1 5V · 2 SIG · 3 FREE · 4 GND`;
     out.push(`<path class="conn ${c.end.toLowerCase()} w-${c.chain.slice(1)}" data-chain="${c.chain}" data-hex="${c.hexId}" d="${line([a, b], y)}" data-tip="${esc(tip)}"/>`);
   }
   const k = w.lane * 1.1;

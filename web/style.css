@@ -747,8 +747,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   pointer-events: none;
 }
 
-.viewport canvas,
-.viewport svg {
+.viewport > canvas,
+.viewport > svg {
   position: absolute;
   inset: 0;
   display: block;
@@ -756,8 +756,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   height: 100%;
 }
 
-.viewport svg { cursor: grab; touch-action: none; }
-.viewport svg.panning { cursor: grabbing; }
+.viewport > svg { cursor: grab; touch-action: none; }
+.viewport > svg.panning { cursor: grabbing; }
 
 .hint {
   position: absolute;
@@ -965,6 +965,23 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wkey { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 4px; margin-top: 4px; }
 .wkey .wires, .wkey .help { grid-column: 1 / -1; }
 .wkey.tkey { grid-template-columns: repeat(4, 1fr); }
+
+/* the connector diagram in the strip wiring key */
+.conn-diagram { display: block; width: 100%; height: auto; margin: 4px 0 2px; }
+.conn-diagram text { font: 600 9px var(--mono); fill: var(--ink); }
+.conn-diagram .cap { fill: var(--muted); }
+.conn-diagram .note { fill: var(--muted); font-weight: 400; }
+.conn-diagram .body { fill: var(--c-led); opacity: 0.45; }
+.conn-diagram .plug { fill: var(--page); stroke: var(--ink); stroke-width: 1.4; }
+.conn-diagram line, .conn-diagram path { fill: none; stroke-width: 2; stroke-linecap: round; }
+.conn-diagram .v5 { stroke: var(--w-5v); }
+.conn-diagram .gnd { stroke: var(--w-gnd); }
+:root[data-theme="dark"] .conn-diagram .gnd { stroke: #c9c5de; }
+.conn-diagram .sig { stroke: var(--w-l5); }
+.conn-diagram .free { stroke: var(--page); stroke-dasharray: 4 3; }
+.conn-diagram .leds rect { fill: #ffe066; stroke: var(--ink); stroke-width: 1; }
+.conn-diagram .chev { stroke: var(--page); stroke-width: 1.6; }
+.conn-diagram .dots circle { fill: var(--ink); }
 .wkey .chain { display: flex; align-items: center; gap: 8px; margin: 0; line-height: 1.5; cursor: default; border-radius: 4px; padding: 0 4px; }
 .wkey .chain:hover { background: color-mix(in srgb, var(--w) 14%, transparent); }
 .wkey .chain b { color: var(--w); font-family: var(--mono); font-size: 0.8rem; min-width: 2.2em; }
