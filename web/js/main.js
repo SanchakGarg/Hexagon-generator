@@ -261,7 +261,7 @@ function update() {
   showHexCard(hoveredId);
   viewer?.update(lastLayout);
   viewer?.setWiring(wiring);
-  focusChain(focusedChain);
+  focusChain(focusedChain, focusedHex);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
   // refit when the wall changes, or when the drawing grew or shrank while the view wasn't zoomed
@@ -496,15 +496,25 @@ boardToggle.addEventListener('click', (e) => {
   update();
 });
 
-// hovering a chain in the wiring key picks it out on the drawing and the model
+// hovering a chain in the wiring key picks it out in every hexagon, on the drawing and the model; hovering a wire on
+// the drawing picks out just that chain in just that hexagon
 let focusedChain = null;
-function focusChain(id) {
+let focusedHex = null;
+function focusChain(id, hexId = null) {
   focusedChain = id;
+  focusedHex = id ? hexId : null;
   const group = svg.querySelector('.wiring');
   group?.classList.toggle('focus', !!id);
   for (const el of svg.querySelectorAll('.wiring .lit')) el.classList.remove('lit');
-  if (id) for (const el of svg.querySelectorAll(`.wiring [data-chain="${id}"]`)) el.classList.add('lit');
-  viewer?.focusWiring(id);
+  const only = focusedHex ? `[data-hex="${focusedHex}"]` : '';
+  if (id) for (const el of svg.querySelectorAll(`.wiring [data-chain="${id}"]${only}`)) el.classList.add('lit');
+  viewer?.focusWiring(focusedHex ? null : id);
+}
+function focusWire(target) {
+  const wire = target?.closest?.('.wiring [data-chain]');
+  const chain = wire?.dataset.chain ?? null;
+  const hexId = wire?.dataset.hex ?? null;
+  if (chain !== focusedChain || hexId !== focusedHex) focusChain(chain, hexId);
 }
 // moving from one row to the next swaps the chain straight over; only leaving the key clears it
 const wiringKey = $('wiring-key');
@@ -995,6 +1005,7 @@ svg.addEventListener('pointermove', (e) => {
     return;
   }
   hover(page !== 1 ? null : hexAt(wallFromSvg(e)));
+  if (page === LABELS_PAGE) focusWire(e.target);
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -1009,6 +1020,7 @@ svg.addEventListener('pointermove', (e) => {
 svg.addEventListener('pointerleave', () => {
   tip.hidden = true;
   hover(null);
+  if (focusedHex) focusChain(null);
 });
 
 // --- 3D: hover and click by raycasting the hexagon meshes ---------------------

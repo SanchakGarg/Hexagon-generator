@@ -55,19 +55,23 @@ const line = (pts, y) => pts.map((p, i) => `${i ? 'L' : 'M'}${fmt(p.x)},${fmt(y(
 // connector bar at both ends of every channel, chevrons for the data direction and a ring where a chain switches wire.
 function wiringSvg(w, y) {
   const out = ['<g class="wiring">'];
-  for (const s of w.sheaths) out.push(`<path class="sheath" data-chain="${s.chain}" d="${line(s.points, y)}" stroke-width="${fmt(w.lane * 4.4)}"/>`);
+  for (const s of w.sheaths) out.push(`<path class="sheath" data-chain="${s.chain}" data-hex="${s.hexId}" d="${line(s.points, y)}" stroke-width="${fmt(w.lane * 4.4)}"/>`);
+  // a wide invisible strip along each channel, a fixed size on screen, so a wire is easy to hover from far out
+  for (const s of w.sheaths) {
+    out.push(`<path class="hit" data-chain="${s.chain}" data-hex="${s.hexId}" d="${line(s.points, y)}" data-tip="${esc(`${s.chain} · channel ${s.channel}`)}"/>`);
+  }
   for (const p of w.power) {
-    out.push(`<path class="pwr pwr-${p.which.toLowerCase()}" data-chain="${p.chain}" d="${line(p.points, y)}" data-tip="${esc(`${p.which} · channel ${p.channel}`)}"/>`);
+    out.push(`<path class="pwr pwr-${p.which.toLowerCase()}" data-chain="${p.chain}" data-hex="${p.hexId}" d="${line(p.points, y)}" data-tip="${esc(`${p.which} · channel ${p.channel}`)}"/>`);
   }
   for (const s of w.signals) {
     const tip = `${s.chain} · ${s.from} → ${s.to} on ${s.wire}\nchannel ${s.channel}`;
-    out.push(`<path class="sig w-${s.key}${s.wire === 'FREE' ? ' free' : ''}" data-chain="${s.chain}" d="${line(s.points, y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="sig w-${s.key}${s.wire === 'FREE' ? ' free' : ''}" data-chain="${s.chain}" data-hex="${s.hexId}" d="${line(s.points, y)}" data-tip="${esc(tip)}"/>`);
   }
   for (const c of w.connectors) {
     const a = { x: c.x + c.n.x * c.half, z: c.z + c.n.z * c.half };
     const b = { x: c.x - c.n.x * c.half, z: c.z - c.n.z * c.half };
     const tip = `Channel ${c.channel} · ${c.end} @ ${c.node}\npins: 5V · SIG · FREE · GND`;
-    out.push(`<path class="conn ${c.end.toLowerCase()} w-${c.chain.slice(1)}" data-chain="${c.chain}" d="${line([a, b], y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="conn ${c.end.toLowerCase()} w-${c.chain.slice(1)}" data-chain="${c.chain}" data-hex="${c.hexId}" d="${line([a, b], y)}" data-tip="${esc(tip)}"/>`);
   }
   const k = w.lane * 1.1;
   for (const a of w.arrows) {
@@ -78,10 +82,10 @@ function wiringSvg(w, y) {
       { x: a.x + ux * k * 0.4, z: a.z + uz * k * 0.4 },
       { x: a.x - ux * k - -uz * k, z: a.z - uz * k - ux * k },
     ];
-    out.push(`<path class="chev w-${a.key}" data-chain="M${a.key}" d="${line(pts, y)}"/>`);
+    out.push(`<path class="chev w-${a.key}" data-chain="${a.chain}" data-hex="${a.hexId}" d="${line(pts, y)}"/>`);
   }
   for (const s of w.switches) {
-    out.push(`<circle class="switch w-${s.key}" data-chain="${s.chain}" cx="${fmt(s.x)}" cy="${fmt(y(s.z))}" r="${fmt(w.lane * ('147'.includes(s.key) ? 6.4 : 5.5))}" data-tip="${esc(`${s.chain} switches ${s.text} at ${s.node}`)}"/>`);
+    out.push(`<circle class="switch w-${s.key}" data-chain="${s.chain}" data-hex="${s.hexId}" cx="${fmt(s.x)}" cy="${fmt(y(s.z))}" r="${fmt(w.lane * ('135'.includes(s.key) ? 6.4 : 5.5))}" data-tip="${esc(`${s.chain} switches ${s.text} at ${s.node}`)}"/>`);
   }
   out.push('</g>');
   return out.join('');

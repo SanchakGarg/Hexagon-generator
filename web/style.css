@@ -33,12 +33,12 @@
   /* wiring: 5V and GND are the same everywhere, each chain's signal has its own colour */
   --w-5v: #e5484d;
   --w-gnd: #2b2a35;
-  --w-m1: #2f7fe0;
-  --w-m2: #0f9e94;
-  --w-m4: #e08a00;
-  --w-m5: #8e4fd6;
-  --w-m7: #2c9c4f;
-  --w-m8: #d6458f;
+  --w-l1: #2f7fe0;
+  --w-l2: #0f9e94;
+  --w-l3: #e08a00;
+  --w-l4: #8e4fd6;
+  --w-l5: #2c9c4f;
+  --w-l6: #d6458f;
   --hl: 80%; /* highlighter strength */
 
   --hand: "Patrick Hand", "Segoe Print", "Bradley Hand", system-ui, sans-serif;
@@ -81,12 +81,12 @@
 
   --w-5v: #ff6b6b;
   --w-gnd: #a9a5c2;
-  --w-m1: #6aa8ff;
-  --w-m2: #4fd1c5;
-  --w-m4: #ffb347;
-  --w-m5: #b78cff;
-  --w-m7: #6fd48c;
-  --w-m8: #ff85c0;
+  --w-l1: #6aa8ff;
+  --w-l2: #4fd1c5;
+  --w-l3: #ffb347;
+  --w-l4: #b78cff;
+  --w-l5: #6fd48c;
+  --w-l6: #ff85c0;
 }
 
 * { box-sizing: border-box; }
@@ -476,7 +476,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .key-node { background: conic-gradient(var(--c-edge) 0 20%, var(--c-2way) 0 40%, var(--c-3way) 0 60%, var(--c-mcu) 0 80%, var(--c-hex) 0); }
 .key-led { background: var(--c-led); border-radius: 50%; }
 .key-edgeled { width: 16px; height: 6px; background: var(--c-led); }
-.key-wiring { width: 16px; height: 4px; border: 0; border-radius: 2px; background: linear-gradient(var(--w-5v) 0 25%, var(--w-m1) 0 50%, var(--w-m7) 0 75%, var(--w-gnd) 0); }
+.key-wiring { width: 16px; height: 4px; border: 0; border-radius: 2px; background: linear-gradient(var(--w-5v) 0 25%, var(--w-l1) 0 50%, var(--w-l5) 0 75%, var(--w-gnd) 0); }
 .key-head { margin-top: 12px; }
 .key-label { width: auto; height: auto; border: 0; font-size: 0.95rem; line-height: 1; color: var(--accent); }
 
@@ -897,12 +897,12 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   pointer-events: none;
 }
 /* wiring on the labels page */
-.w-1 { --w: var(--w-m1); }
-.w-2 { --w: var(--w-m2); }
-.w-4 { --w: var(--w-m4); }
-.w-5 { --w: var(--w-m5); }
-.w-7 { --w: var(--w-m7); }
-.w-8 { --w: var(--w-m8); }
+.w-1 { --w: var(--w-l1); }
+.w-2 { --w: var(--w-l2); }
+.w-3 { --w: var(--w-l3); }
+.w-4 { --w: var(--w-l4); }
+.w-5 { --w: var(--w-l5); }
+.w-6 { --w: var(--w-l6); }
 .wiring path,
 .wiring circle {
   fill: none;
@@ -912,6 +912,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   pointer-events: stroke;
 }
 .wiring .sheath { stroke: var(--page); stroke-linecap: butt; opacity: 0.9; vector-effect: none; pointer-events: none; }
+.wiring .hit { stroke: transparent; stroke-width: 14px; stroke-linecap: butt; cursor: default; }
 .wiring .pwr { stroke-width: 1.1px; }
 .wiring .pwr-5v { stroke: var(--w-5v); }
 .wiring .pwr-gnd { stroke: var(--w-gnd); }
@@ -925,7 +926,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring .pwr:hover { stroke-width: 3.6px; }
 .wiring .conn:hover { stroke-width: 5px; }
 /* a picked chain stays bright, the rest fade back but stay readable */
-.wiring.focus [data-chain]:not(.lit):not(.sheath) { opacity: 0.22; }
+.wiring.focus [data-chain]:not(.lit):not(.sheath):not(.hit) { opacity: 0.22; }
 .hide-wiring .wiring { display: none; }
 
 /* the wiring key in the notes card */

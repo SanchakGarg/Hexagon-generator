@@ -8,10 +8,11 @@
 // neighbour's own 3, 6 or 9). There it switches SIG → FREE and rides the FREE wire of its partner's channel back to
 // inner(s−30), switches FREE → SIG, and goes on to outer(s−60) → corner(s−30), then along the Edge to its plate if
 // side s has an Edge. With a neighbour instead the chain stops at the corner, which the neighbour's controller
-// serves. The second chain of the pair is the mirror image. Each chain is named after its first stop: M1, M2, M4, M5,
-// M7, M8.
+// serves. The second chain of the pair is the mirror image. The chains are L1–L6, in the order of their first stops
+// 1, 2, 4, 5, 7, 8.
 
 const SIDES = [60, 180, 300];
+const CHAIN_NAMES = { 1: 'L1', 2: 'L2', 4: 'L3', 5: 'L4', 7: 'L5', 8: 'L6' };
 const rad = (d) => (d * Math.PI) / 180;
 
 // across a channel, looking from IN to OUT, the four wires lie left to right in this order
@@ -46,7 +47,7 @@ export function buildWiring(hexes, edges, lat, allNodes) {
         const outer = at(h, mid, s - 60 * sign);
         const corner = at(h, R, s - 30 * sign);
         if (!first || !X || !back || !outer || !corner) continue;
-        const id = `M${first.label}`;
+        const id = CHAIN_NAMES[first.label] ?? `L${first.label}`;
         const stops = [M, first, X, back, outer, corner];
         if (plate) stops.push(plate);
         const hops = [];
@@ -59,7 +60,7 @@ export function buildWiring(hexes, edges, lat, allNodes) {
           hops.push({ from, to, wire, channel });
           if (wire === 'SIG') channels.push({ ...channel, chain: id, hexId: h.id });
         }
-        chains.push({ id, key: first.label, hexId: h.id, side: s, stops, hops, edge: !!plate });
+        chains.push({ id, key: id.slice(1), hexId: h.id, side: s, stops, hops, edge: !!plate });
       }
     }
   }
@@ -129,13 +130,13 @@ export function strandPaths({ chains, channels }, lat) {
   for (const c of channels) {
     const name = channelName(c);
     // the four wires lie on a pale ribbon, so they read over the dark channel
-    sheaths.push({ chain: c.chain, points: along(c, 'MID') });
-    for (const which of ['5V', 'GND']) power.push({ which, channel: name, chain: c.chain, points: along(c, which) });
+    sheaths.push({ chain: c.chain, hexId: c.hexId, channel: name, points: along(c, 'MID') });
+    for (const which of ['5V', 'GND']) power.push({ which, channel: name, chain: c.chain, hexId: c.hexId, points: along(c, which) });
     const { u, n } = geom(c);
     for (const [end, node, sign] of [['IN', c.in, 1], ['OUT', c.out, -1]]) {
       const x = node.x + u.x * trim * sign;
       const z = node.z + u.z * trim * sign;
-      connectors.push({ end, channel: name, node: nm(node), chain: c.chain, x, z, n, half: lane * 2 });
+      connectors.push({ end, channel: name, node: nm(node), chain: c.chain, hexId: c.hexId, x, z, n, half: lane * 2 });
     }
   }
 
@@ -152,9 +153,9 @@ export function strandPaths({ chains, channels }, lat) {
       signals.push({ chain: chain.id, key: chain.key, hexId: chain.hexId, wire: hop.wire, channel: channelName(hop.channel), from: nm(hop.from), to: nm(hop.to), points: all });
       const m = pts[Math.floor(pts.length / 2)];
       const d = dirOf(pts.slice(Math.floor(pts.length / 2) - 1), false);
-      arrows.push({ key: chain.key, x: m.x, z: m.z, angle: Math.atan2(d.z, d.x) });
+      arrows.push({ key: chain.key, chain: chain.id, hexId: chain.hexId, x: m.x, z: m.z, angle: Math.atan2(d.z, d.x) });
       if (i > 0 && hop.wire !== chain.hops[i - 1].wire) {
-        switches.push({ key: chain.key, chain: chain.id, x: hop.from.x, z: hop.from.z, node: nm(hop.from), text: `${chain.hops[i - 1].wire}→${hop.wire}` });
+        switches.push({ key: chain.key, chain: chain.id, hexId: chain.hexId, x: hop.from.x, z: hop.from.z, node: nm(hop.from), text: `${chain.hops[i - 1].wire}→${hop.wire}` });
       }
       prev = pts;
     });

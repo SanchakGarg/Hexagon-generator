@@ -1049,7 +1049,7 @@ export async function createViewer(container, geo) {
     for (const p of paths.power) add(`${p.which}:${p.chain.slice(1)}`, p.which === '5V' ? '--w-5v' : '--w-gnd', tube(p.points, y, r * 0.7, lift));
     for (const sgl of paths.signals) {
       const pieces = sgl.wire === 'FREE' ? dashes(sgl.points, lattice.rho * 0.35, lattice.rho * 0.22) : [sgl.points];
-      for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.key}`, `--w-m${sgl.key}`, tube(piece, y, r, lift));
+      for (const piece of pieces) if (piece.length > 1) add(`sig:${sgl.key}`, `--w-l${sgl.key}`, tube(piece, y, r, lift));
     }
     for (const [key, g] of groups) {
       const material = toon({ color: cssColor(g.cssVar), transparent: true });
@@ -1065,7 +1065,7 @@ export async function createViewer(container, geo) {
   function focusWiring(id) {
     wireFocus = id;
     for (const mesh of wiringRoot.children) {
-      mesh.material.opacity = !id || `M${mesh.userData.chain}` === id ? 1 : 0.22;
+      mesh.material.opacity = !id || `L${mesh.userData.chain}` === id ? 1 : 0.22;
       mesh.material.depthWrite = mesh.material.opacity === 1;
     }
     applyShow();
