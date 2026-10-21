@@ -11,10 +11,31 @@ const HINTS = {
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
 const PAGES = ['Configure', 'Parts list'];
-// LED channels are cut 27 cm long from 2 m lengths, so each length gives 7
+// LED channels are cut 27 cm long from 2 m lengths, so each length gives 7; each channel holds 15 LEDs of a
+// 60-per-metre WS2812B strip that comes in 5 m rolls
 const CHANNEL_CM = 27;
 const LENGTH_CM = 200;
 const CHANNELS_PER_LENGTH = Math.floor(LENGTH_CM / CHANNEL_CM);
+const LEDS_PER_CHANNEL = 15;
+const LEDS_PER_M = 60;
+const ROLL_M = 5;
+// every node, central ones too, is 27 g of 3D-printing filament
+const NODE_GRAMS = 27;
+// prices in rupees, per piece unless noted
+const PRICE = {
+  channel: 50, // 2 m LED channel
+  strip: 1365, // 5 m WS2812B roll
+  filament: 1349, // 1 kg roll
+  esp: 792, // ESP32-ETH01
+  psu: 1115, // 5 V 10 A power supply
+  drywall: 1.4,
+  m3: 3.5,
+  standoff: 4.4,
+};
+const rupees = (n) => {
+  const f = Number.isInteger(n) ? 0 : 2;
+  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: f, maximumFractionDigits: f })}`;
+};
 const AUTOSAVE_MS = 5 * 60 * 1000;
 const SAVE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 const MAX_ZOOM = 40;
@@ -103,40 +124,91 @@ function renderPicks() {
   hint.classList.toggle('pushed', !pickBar.hidden);
 }
 
-// what to buy for the wall as it stands
+// what to buy for the wall as it stands, grouped like a shopping list: each section with its own items, prices in
+// rupees, and a grand total at the end. Items without a price yet show -- and leave the totals alone.
 function renderBom(s, hexes, rim) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
-  const rows = [
-    [s.counts.nodes, 'Nodes'],
-    [s.counts.nodes - skipped, 'Touch sensors', skipped ? `1 per node, ${skipped} left out` : '1 per node'],
-    [s.counts.leds, 'LED channels', `${CHANNEL_CM} cm each`],
-    [Math.ceil(s.counts.leds / CHANNELS_PER_LENGTH), `LED channel lengths (${LENGTH_CM / 100} m)`, `${CHANNELS_PER_LENGTH} channels cut from each`],
-    [hexes.length, 'ESP32 Ethernet boards', '1 per hexagon · WT32-ETH01 works'],
+  const channels = s.counts.leds;
+  const nodes = s.counts.nodes;
+  const central = s.counts.mcu;
+  const stripM = (channels * LEDS_PER_CHANNEL) / LEDS_PER_M;
+  const grams = nodes * NODE_GRAMS;
+  const sections = [
+    {
+      title: 'LED channels',
+      note: `${channels} channel${channels === 1 ? '' : 's'} · ${CHANNEL_CM} cm each`,
+      items: [
+        { label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each` },
+        { label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m` },
+        { label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel' },
+      ],
+    },
+    {
+      title: 'Nodes',
+      note: `${nodes} node${nodes === 1 ? '' : 's'}`,
+      items: [
+        { label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node` },
+        { label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart' },
+        { label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon' },
+        { label: 'Touch sensors', qty: nodes - skipped, rate: null, note: skipped ? `1 per node, ${skipped} left out` : '1 per node' },
+      ],
+    },
+    {
+      title: 'Network and control',
+      note: '1 per hexagon',
+      items: [
+        { label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp },
+        { label: 'Ethernet cables', qty: null, rate: null },
+        { label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu },
+      ],
+    },
+    {
+      title: 'Miscellaneous',
+      note: 'per node',
+      items: [
+        { label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node' },
+        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node' },
+        { label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node' },
+        ...(boardOn && rim.length ? [{ label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
+      ],
+    },
   ];
   $('bom-for').textContent = `for ${hexes.length} hexagon${hexes.length === 1 ? '' : 's'}`;
-  if (boardOn && rim.length) rows.push([1, 'Backboard', `${formatLength(span('x'))} × ${formatLength(span('z'))}`]);
-  // written like a note: what, then how many at the end of the line, with any working in small print beneath
-  $('bom').replaceChildren(
-    ...rows
-      .filter(([n]) => n > 0)
-      .map(([n, label, note]) => {
-        const line = document.createElement('p');
-        line.className = 'line';
-        const what = document.createElement('span');
-        what.textContent = label;
-        if (note) {
-          const small = document.createElement('small');
-          small.textContent = note;
-          what.append(small);
-        }
-        const b = document.createElement('b');
-        b.textContent = n;
-        line.append(what, b);
-        return line;
-      }),
-  );
+
+  const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
+  const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
+  // written like a note: what, then the amount at the end of the line, with the working in small print beneath
+  const line = (cls, label, note, amount) => {
+    const p = document.createElement('p');
+    p.className = cls;
+    const what = document.createElement('span');
+    what.textContent = label;
+    if (note) {
+      const small = document.createElement('small');
+      small.textContent = note;
+      what.append(small);
+    }
+    const b = document.createElement('b');
+    b.textContent = amount;
+    p.append(what, b);
+    return p;
+  };
+  const out = [];
+  for (const sec of sections) {
+    out.push(line('line section', sec.title, sec.note, rupees(sum(sec.items))));
+    for (const i of sec.items) {
+      const qty = i.qty == null ? '--' : i.qty;
+      const working = [i.rate == null ? `${qty} × --` : `${qty} × ${rupees(i.rate)}`, i.note].filter(Boolean).join(' · ');
+      const c = cost(i);
+      out.push(line('line item', i.label, working, c == null ? '--' : rupees(c)));
+    }
+  }
+  const all = sections.flatMap((x) => x.items);
+  const unpriced = all.filter((i) => cost(i) == null).length;
+  out.push(line('line grand', 'Total', unpriced ? `${unpriced} item${unpriced === 1 ? '' : 's'} not priced yet` : '', rupees(sum(all))));
+  $('bom').replaceChildren(...out);
 }
 
 function update() {

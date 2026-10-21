@@ -939,7 +939,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .app[data-page="2"] [data-page-only="1"] { display: none; }
 
 .card.totals { max-height: calc(100% - 90px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
-.bom { min-width: 250px; margin-top: 4px; }
+.bom { min-width: 300px; margin-top: 4px; }
 .bom-head { display: flex; align-items: baseline; gap: 10px; }
 .bom-head .for { color: var(--muted); font-size: 1.1rem; }
 
@@ -963,6 +963,12 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .toast[hidden] { display: none; }
 .toast.show { animation: note-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .bom .line { font-size: 1.1rem; line-height: 1.2; padding-block: 4px 3px; }
+/* section heads stand out from the items indented beneath them */
+.bom .section { margin-top: 12px; font-size: 1.3rem; border-bottom-color: var(--line); }
+.bom .section:first-child { margin-top: 0; }
+.bom .section b { color: var(--ink); }
+.bom .item { padding-left: 16px; }
+.bom .grand { margin-top: 12px; padding-top: 6px; font-size: 1.45rem; border-top: 2px solid var(--ink); border-bottom: 0; }
 
 /* --- footer: saves on the left, pages on the right --------------------------- */
 
