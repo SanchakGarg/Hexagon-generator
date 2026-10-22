@@ -139,8 +139,9 @@ function handArrow(a, b, seed, head, cls, attrs = '', inner = '') {
 }
 
 // a node as a small hexagon washed in its kind's colour, the wash a little off the pencil line as paint would be,
-// with a hand-drawn arrow for the way its node-1 side points
-function nodeMarks(L, nodes, y, { arrows = false, labels = false, scale = 1 } = {}) {
+// with a hand-drawn arrow for the way its node-1 side points. Over the rendered meshes the node is already drawn,
+// so only its arrow and label go on top.
+function nodeMarks(L, nodes, y, { arrows = false, labels = false, scale = 1, bodies = true } = {}) {
   const r = L.lat.rho * scale;
   return nodes
     .map((n) => {
@@ -148,15 +149,22 @@ function nodeMarks(L, nodes, y, { arrows = false, labels = false, scale = 1 } = 
       const cx = n.x;
       const cy = y(n.z);
       const j = r * 0.09;
-      let out = `<g class="pb-node k-${n.kind}"><title>${esc(`${n.label ?? ''} · ${KIND_NAMES[n.kind] ?? n.kind}`)}</title>`;
-      out += `<path class="wash" d="${wobbly(hexCorners(cx + r * 0.1, cy + r * 0.08, r * 0.96), `${seed}w`, j * 1.4, true)}"/>`;
-      out += `<path class="ink" d="${wobbly(hexCorners(cx, cy, r), `${seed}a`, j, true)}"/>`;
-      out += `<path class="ink again" d="${wobbly(hexCorners(cx, cy, r * 0.97), `${seed}b`, j * 1.3, true)}"/></g>`;
+      let out = '';
+      if (bodies) {
+        out += `<g class="pb-node k-${n.kind}"><title>${esc(`${n.label ?? ''} · ${KIND_NAMES[n.kind] ?? n.kind}`)}</title>`;
+        out += `<path class="wash" d="${wobbly(hexCorners(cx + r * 0.1, cy + r * 0.08, r * 0.96), `${seed}w`, j * 1.4, true)}"/>`;
+        out += `<path class="ink" d="${wobbly(hexCorners(cx, cy, r), `${seed}a`, j, true)}"/>`;
+        out += `<path class="ink again" d="${wobbly(hexCorners(cx, cy, r * 0.97), `${seed}b`, j * 1.3, true)}"/></g>`;
+      }
       if (arrows && n.facing != null) {
         const u = [Math.cos(rad(n.facing)), -Math.sin(rad(n.facing))];
         out += handArrow([cx + u[0] * r * 1.05, cy + u[1] * r * 1.05], [cx + u[0] * r * 2.9, cy + u[1] * r * 2.9], `${seed}f`, r * 0.7, 'pb-face');
       }
-      if (labels) out += `<text class="pb-nlabel" x="${fmt(cx)}" y="${fmt(cy)}" font-size="${fmt(r * 0.95)}">${esc(n.label ?? '')}</text>`;
+      if (labels && bodies) out += `<text class="pb-nlabel" x="${fmt(cx)}" y="${fmt(cy)}" font-size="${fmt(r * 0.95)}">${esc(n.label ?? '')}</text>`;
+      else if (labels) {
+        const fs = L.lat.rho * 1.1;
+        out += `<text class="pb-nlabel on-render" x="${fmt(cx)}" y="${fmt(cy)}" font-size="${fmt(fs)}" stroke-width="${fmt(fs * 0.27)}">${esc(n.label ?? '')}</text>`;
+      }
       return out;
     })
     .join('');
@@ -614,7 +622,7 @@ export function renderPlaybook(root, ctx) {
   const nodeBrowser = browser('nodes', L, (hex) => {
     const mine = new Set(nodesOf(L, ctx.allNodes, hex));
     const box = frameOf(L, hex);
-    const drawing = svgEl(box, baseDrawing(ctx, L, box, y, { hex }) + nodeMarks(L, [...mine], y, { arrows: true, labels: true, scale: 1.4 }), 'pb-zoom');
+    const drawing = svgEl(box, baseDrawing(ctx, L, box, y, { hex }) + nodeMarks(L, [...mine], y, { arrows: true, labels: true, scale: 1.4, bodies: !ctx.snapshot }), 'pb-zoom');
     const corners = [...mine].filter((n) => /^[a-f]$/.test(n.label ?? ''));
     const borrowed = corners.filter((n) => n.hexId !== hex.id);
     const kinds = {};
@@ -633,7 +641,7 @@ export function renderPlaybook(root, ctx) {
     4,
     'Node placements',
     h('p', {}, 'Here is the wall with just its hexagon outlines and where each node sits. Every node is turned a set way: the tiny arrow shows where its node-1 side points. Click a hexagon, or step through them below, to see one at a time.'),
-    svgEl(whole, baseDrawing(ctx, L, whole, y) + nodeMarks(L, ctx.allNodes, y, { arrows: true }) + pickHexes(L, y), 'pb-wall pick'),
+    svgEl(whole, baseDrawing(ctx, L, whole, y) + nodeMarks(L, ctx.allNodes, y, { arrows: true, bodies: !ctx.snapshot }) + pickHexes(L, y), 'pb-wall pick'),
     h('div', { class: 'pb-legend' }, ['mcu', 'normal', 'edge', '2way', '3way'].map((k) => h('span', {}, h('i', { class: `sw k-${k}` }), KIND_NAMES[k]))),
     nodeBrowser,
   );
@@ -643,7 +651,7 @@ export function renderPlaybook(root, ctx) {
     const box = frameOf(L, hex);
     const arrows = ctx.arrows.filter((a) => a.hexId === hex.id);
     const mine = nodesOf(L, ctx.allNodes, hex);
-    const marks = ctx.snapshot ? mine.map((n) => `<text class="pb-nlabel on-render" x="${fmt(n.x)}" y="${fmt(y(n.z))}" font-size="${fmt(lat.rho * 1.1)}" stroke-width="${fmt(lat.rho * 0.3)}">${esc(n.label ?? '')}</text>`).join('') : nodeMarks(L, mine, y, { labels: true, scale: 1.4 });
+    const marks = nodeMarks(L, mine, y, { labels: true, scale: 1.4, bodies: !ctx.snapshot });
     const drawing = svgEl(box, baseDrawing(ctx, L, box, y, { hex, channels, softLeds: true }) + marks + channelArrowsSvg(arrows, lat, y), 'pb-zoom');
     const chains = ctx.topology.chains.filter((x) => x.hexId === hex.id).sort((a, b) => a.id.localeCompare(b.id));
     return [
