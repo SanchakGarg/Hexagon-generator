@@ -14,9 +14,9 @@ const HINTS = {
   touch: 'Hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
-const PAGES = ['Configure', 'Node labels', 'Parts list'];
-const LABELS_PAGE = 2;
-const PARTS_PAGE = 3;
+const PAGES = ['Configure', 'Parts list', 'Connections and wiring'];
+const PARTS_PAGE = 2;
+const LABELS_PAGE = 3;
 // LED channels are cut 27 cm long from 2 m lengths, so each length gives 7; each channel holds 15 LEDs of a
 // 60-per-metre WS2812B strip that comes in 5 m rolls
 const CHANNEL_CM = 27;
@@ -37,6 +37,7 @@ const PRICE = {
   psu: 1115, // 5 V 10 A power supply
   drywall: 1.4,
   m3: 3.5,
+  m3b: 0.95,
   standoff: 4.4,
 };
 const rupees = (n) => {
@@ -178,6 +179,7 @@ function renderBom(s, hexes, rim) {
       items: [
         { label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node' },
         { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node' },
+        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3b, note: '3 per node' },
         { label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node' },
         ...(boardOn && rim.length ? [{ label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
       ],
@@ -547,7 +549,7 @@ for (const key of [$('wiring-key'), $('touch-key')]) {
   key.addEventListener('pointerleave', () => focusChain(null));
 }
 
-// --- pages: configure the wall, label its nodes, then the parts list ----------------------------
+// --- pages: configure the wall, the parts list, then its connections and wiring ----------------------------
 
 const app = document.querySelector('.app');
 const backBtn = $('back-btn');
@@ -567,6 +569,8 @@ function setPage(next) {
   hover(null);
   // until the meshes are in, the hint says they are loading
   if (viewer) hint.textContent = hintFor(view);
+  // the connections and wiring page pales the LED channels
+  viewer?.setTheme();
   if (lattice) update();
 }
 backBtn.addEventListener('click', () => setPage(page - 1));

@@ -90,7 +90,7 @@
         </div>
       </details>
 
-      <details class="card" data-section="nodes" data-page-only="3" open>
+      <details class="card" data-section="nodes" data-page-only="2" open>
         <summary><h2>Nodes</h2></summary>
         <div class="card-body">
           <div class="lines tally">
@@ -143,7 +143,7 @@
       </nav>
       <div class="viewport" id="viewport">
         <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout, front view"></svg>
-        <div class="seg wiring-switch" role="group" aria-label="What the labels page draws" id="wiring-switch">
+        <div class="seg wiring-switch" role="group" aria-label="What the connections and wiring page draws" id="wiring-switch">
           <button type="button" data-wview="channels" aria-pressed="true">LED channels</button>
           <button type="button" data-wview="wiring" aria-pressed="false">Strip wiring</button>
           <button type="button" data-wview="touch" aria-pressed="false">Touch sensors</button>
@@ -171,7 +171,7 @@
                 <p class="line"><span>LED channels</span><b id="total-leds">–</b></p>
               </div>
             </div>
-            <div class="labels-key" data-page-only="2">
+            <div class="labels-key" data-page-only="3">
               <h2>Node labels</h2>
               <p class="help">The same in every hexagon</p>
               <div class="lines">
@@ -185,7 +185,7 @@
               <p class="help" data-wview-only="wiring">Each hexagon's M drives six chains. Hover one to pick it out.</p>
               <p class="help" data-wview-only="channels">Each arrow runs from a channel's DIN to its DOUT, in the colour of the chain that drives it.</p>
               <h2 class="key-head" data-wview-only="touch">Touch sensors</h2>
-              <p class="help" data-wview-only="touch">Each node's sensor is wired, from the dot, to M or to T1, T2, T3 (collected at nodes 3, 6, 9); a ring is a node that takes its own. Hover one to pick it out.</p>
+              <p class="help" data-wview-only="touch">Each node's sensor is wired, from the dot, to M or to T1, T2, T3 (collected at nodes 3, 6, 9); a ring is a node that takes its own. T1, T2 and T3 each go on to M as a twisted pair: 3 → 4 → M, 6 → 7 → M, 9 → 1 → M. Hover one to pick it out.</p>
               <div class="wkey tkey" id="touch-key" data-wview-only="touch">
                 <p class="chain t-m" data-chain="M"><i class="swatch"></i><b>M</b></p>
                 <p class="chain t-1" data-chain="T1"><i class="swatch"></i><b>T1</b></p>
@@ -226,7 +226,7 @@
                 <p class="help">At a turn (E1–E3, or a neighbour's 3, 6, 9) a chain's DOUT SIG is jumped to pin 3 FREE of its partner channel, rides back past the LEDs, and is jumped to that channel's DIN SIG again at the inner node: the dotted rings. 5V and GND run through every connector. A coloured bar on the drawing marks a channel's IN end.</p>
               </div>
             </div>
-            <div data-page-only="3">
+            <div data-page-only="2">
               <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span></div>
               <div class="lines bom" id="bom"></div>
             </div>

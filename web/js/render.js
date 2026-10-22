@@ -92,6 +92,7 @@ function wiringSvg(w, y) {
 }
 
 // The LED channels view: one arrow along each channel from DIN to DOUT, in the colour of the chain that drives it.
+// A pulse runs down each channel of a hovered chain in turn, like the data passing along it.
 function arrowsSvg(arrows, lat, y) {
   const head = lat.rho * 1.1;
   const out = ['<g class="wiring chans">'];
@@ -102,6 +103,7 @@ function arrowsSvg(arrows, lat, y) {
     const attrs = `data-chain="${a.chain}" data-hex="${a.hexId}"`;
     const tip = `Channel ${a.channel} · ${a.chain}\nDIN @ ${a.din} → DOUT @ ${a.dout}`;
     out.push(`<path class="hit" ${attrs} d="${line(a.span, y)}" data-tip="${esc(tip)}"/>`);
+    out.push(`<path class="pulse w-${a.key}" ${attrs} d="${line(a.span, y)}" pathLength="100" stroke-width="${fmt(lat.rho * 0.55)}" style="--i:${a.order}"/>`);
     out.push(`<path class="arrow w-${a.key}" ${attrs} d="${line([a.a, base], y)}"/>`);
     out.push(`<polygon class="head w-${a.key}" ${attrs} points="${tri.map((p) => `${fmt(p.x)},${fmt(y(p.z))}`).join(' ')}"/>`);
   }
@@ -110,7 +112,8 @@ function arrowsSvg(arrows, lat, y) {
 }
 
 // The touch sensors view: each node's sensor wire runs to the node that collects it, in that node's colour, with a
-// dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own.
+// dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own. Each outer node's
+// group goes on to M as a twisted pair.
 export const groupClass = (g) => (g === 'M' ? 't-m' : `t-${g.slice(1)}`);
 function sensorsSvg(s, lat, y) {
   const out = ['<g class="wiring touch">'];
@@ -120,6 +123,12 @@ function sensorsSvg(s, lat, y) {
     const tip = `${r.group} · touch sensor at ${r.from}\nwired ${route}`;
     out.push(`<path class="hit" ${attrs} d="${line(r.points, y)}" data-tip="${esc(tip)}"/>`);
     out.push(`<path class="tw ${groupClass(r.group)}" ${attrs} d="${line(r.points, y)}"/>`);
+  }
+  for (const t of s.trunks) {
+    const attrs = `data-chain="${t.group}" data-hex="${t.hexId}"`;
+    const tip = `${t.group} · twisted pair from ${t.from} to M\nwired ${[t.from, ...t.via, t.to].join(' → ')}`;
+    out.push(`<path class="hit" ${attrs} d="${line(t.points, y)}" data-tip="${esc(tip)}"/>`);
+    t.strands.forEach((pts, i) => out.push(`<path class="twist${i ? ' back' : ''} ${groupClass(t.group)}" ${attrs} d="${line(pts, y)}"/>`));
   }
   const k = s.lane * 1.4;
   for (const a of s.arrows) {

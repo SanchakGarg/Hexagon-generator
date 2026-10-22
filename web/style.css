@@ -23,7 +23,9 @@
   /* part colours, shared by the drawing, the keys and the 3D view */
   --c-hex: #a9dcc6;
   --c-mcu: #d98be3;
-  --c-led: #4a4560; /* dark channels read against the pale board */
+  --c-led-base: #4a4560; /* dark channels read against the pale board */
+  --c-led: var(--c-led-base);
+  --c-led-soft: #d6d1e6; /* paler channels on the connections and wiring page, so the wires read over them */
   --c-3way: #93cdee;
   --c-2way: #bba8ef;
   --c-edge: #f8ae8e;
@@ -74,7 +76,9 @@
 
   --c-hex: #8fc6af;
   --c-mcu: #c98ad6;
-  --c-led: #f0b440;
+  --c-led-base: #f0b440;
+  --c-led: var(--c-led-base);
+  --c-led-soft: #5b5778;
   --c-3way: #7fb7d6;
   --c-2way: #a595d9;
   --c-edge: #e39a7e;
@@ -940,6 +944,17 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 /* LED channels view: an arrow from DIN to DOUT on every channel */
 .wiring .arrow { stroke: var(--w); stroke-width: 4px; stroke-linecap: butt; pointer-events: none; }
 .wiring .head { fill: var(--w); stroke: var(--page); stroke-width: 1px; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+/* a hovered chain's channels each carry a pulse from DIN to DOUT, one after the other down the chain */
+/* sized in wall units, so its dash follows pathLength rather than the screen */
+.wiring .pulse { display: none; stroke: var(--w); stroke-dasharray: 3 97; vector-effect: none; pointer-events: none; }
+.wiring.focus .pulse.lit { display: inline; animation: signal 1.4s linear infinite; animation-delay: calc(var(--i) * 0.23s); }
+@keyframes signal {
+  from { stroke-dashoffset: 3; }
+  to { stroke-dashoffset: -97; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wiring.focus .pulse.lit { display: none; }
+}
 
 /* strip wiring or LED channels, on the labels page; on a phone it sits under the 2D/3D switch */
 /* touch sensors view */
@@ -951,9 +966,14 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring .tdot { fill: var(--w); stroke: var(--page); stroke-width: 1px; pointer-events: none; }
 .wiring .tring { stroke: var(--w); stroke-width: 2px; }
 .wiring.touch .chev { stroke: var(--w); }
+/* the twisted pair on to M: two strands crossing, the one behind a shade darker */
+.wiring .twist { stroke: var(--w); stroke-width: 1.8px; }
+.wiring .twist.back { stroke: color-mix(in srgb, var(--w) 65%, var(--ink)); }
 
 .wiring-switch { position: absolute; top: 14px; left: 50%; translate: -50% 0; z-index: 3; background: var(--page); }
-.app:not([data-page="2"]) .wiring-switch { display: none; }
+.app:not([data-page="3"]) .wiring-switch { display: none; }
+/* paler LED channels behind the wiring, read by the drawing and the 3D model alike */
+.app[data-page="3"] { --c-led: var(--c-led-soft); }
 .app:not([data-wview="channels"]) [data-wview-only="channels"],
 .app:not([data-wview="wiring"]) [data-wview-only="wiring"],
 .app:not([data-wview="touch"]) [data-wview-only="touch"],
@@ -971,7 +991,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .conn-diagram text { font: 600 9px var(--mono); fill: var(--ink); }
 .conn-diagram .cap { fill: var(--muted); }
 .conn-diagram .note { fill: var(--muted); font-weight: 400; }
-.conn-diagram .body { fill: var(--c-led); opacity: 0.45; }
+.conn-diagram .body { fill: var(--c-led-base); opacity: 0.45; }
 .conn-diagram .plug { fill: var(--page); stroke: var(--ink); stroke-width: 1.4; }
 .conn-diagram line, .conn-diagram path { fill: none; stroke-width: 2; stroke-linecap: round; }
 .conn-diagram .v5 { stroke: var(--w-5v); }
@@ -1076,7 +1096,9 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .app:not([data-page="3"]) [data-page-only="3"] { display: none; }
 
 .card.totals { display: flex; flex-direction: column; max-height: calc(100% - 90px); pointer-events: auto; }
-.totals-scroll { flex: 0 1 auto; min-height: 0; overflow: hidden auto; scrollbar-width: thin; }
+/* scrolls by wheel, touch or keys, with no bar drawn */
+.totals-scroll { flex: 0 1 auto; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
+.totals-scroll::-webkit-scrollbar { display: none; }
 .bom { min-width: 330px; margin-top: 4px; }
 .bom-head { display: flex; align-items: baseline; gap: 10px; }
 .bom-head .for { color: var(--muted); font-size: 1.1rem; }

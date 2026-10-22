@@ -51,6 +51,7 @@ export function buildWiring(hexes, edges, lat, allNodes) {
         const stops = [M, first, X, back, outer, corner];
         if (plate) stops.push(plate);
         const hops = [];
+        let order = 0;
         for (let i = 1; i < stops.length; i++) {
           const from = stops[i - 1];
           const to = stops[i];
@@ -58,7 +59,8 @@ export function buildWiring(hexes, edges, lat, allNodes) {
           const wire = from === X ? 'FREE' : 'SIG';
           const channel = wire === 'SIG' ? { in: from, out: to, onEdge: !!plate && i === stops.length - 1 } : { in: to, out: from, onEdge: false };
           hops.push({ from, to, wire, channel });
-          if (wire === 'SIG') channels.push({ ...channel, chain: id, hexId: h.id });
+          // order: where the channel sits along its chain, so the data can be shown passing down it
+          if (wire === 'SIG') channels.push({ ...channel, chain: id, hexId: h.id, order: order++ });
         }
         chains.push({ id, key: id.slice(1), hexId: h.id, side: s, stops, hops, edge: !!plate });
       }
@@ -85,6 +87,7 @@ export function channelArrows({ channels }, lat) {
       chain: c.chain,
       key: c.chain.slice(1),
       hexId: c.hexId,
+      order: c.order,
       channel: channelName(c),
       din: nm(c.in),
       dout: nm(c.out),
@@ -205,6 +208,8 @@ export function strandPaths({ chains, channels }, lat) {
 //   E2 → e → 6, E3 → c → 3.
 // A shared corner goes with the hexagon that owns it, the same one that names it. Nodes picked on the parts page as
 // having no touch sensor are left out.
+// Each outer node's group then goes on to M as one twisted pair along the spoke beside it: 3 → 4 → M, 6 → 7 → M and
+// 9 → 1 → M; a group with no sensor left in it needs none.
 const INNER = [90, 30, 330, 270, 210, 150];
 const HUB_OF_CORNER = { 90: 120, 150: 120, 30: 0, 330: 0, 270: 240, 210: 240 };
 const EDGE_ROUTE = { 60: [90, 120], 180: [210, 240], 300: [330, 0] }; // side → [corner, hub]
@@ -225,6 +230,7 @@ export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) 
   const mid = (R * Math.sqrt(3)) / 2;
   const runs = [];
   const selfs = [];
+  const trunks = [];
   const has = (n) => n && !noSensor.has(n.key);
   for (const h of hexes) {
     const M = at(h, 0, 0);
@@ -239,6 +245,7 @@ export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) 
       const n = hub(a);
       if (has(n)) selfs.push({ group: TOUCH_GROUP[n.label], hexId: h.id, node: n });
     }
+    const groupsFrom = runs.length;
     for (const [corner, hubAngle] of Object.entries(HUB_OF_CORNER)) {
       const c = at(h, R, +corner);
       const target = hub(hubAngle);
@@ -252,13 +259,46 @@ export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) 
       const target = hub(route[1]);
       if (target) add(TOUCH_GROUP[target.label], [plate, at(h, R, route[0]), target]);
     }
+    for (const a of [0, 120, 240]) {
+      const n = hub(a);
+      const via = at(h, R / 2, a - 30);
+      if (!n || !via) continue;
+      const group = TOUCH_GROUP[n.label];
+      const used = selfs.some((x) => x.hexId === h.id && x.group === group) || runs.slice(groupsFrom).some((r) => r.group === group);
+      if (used) trunks.push({ group, hexId: h.id, stops: [n, via, M] });
+    }
   }
-  return { runs, selfs };
+  return { runs, selfs, trunks };
 }
 
 // Wall-space polylines for the touch sensor wires: each runs along the channels from its node to its collecting
 // node, side by side where several share a channel; a ring marks a node that takes its own sensor.
-export function sensorPaths({ runs, selfs }, lat) {
+// Two strands wound round a centre line, crossing every half pitch: the twisted pair on the drawing.
+function twist(points, amp, pitch) {
+  const even = [points[0]];
+  let s = 0;
+  const step = pitch / 16;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    for (let t = step - s; t < d; t += step) even.push({ x: a.x + ((b.x - a.x) * t) / d, z: a.z + ((b.z - a.z) * t) / d });
+    s = (s + d) % step;
+  }
+  even.push(points[points.length - 1]);
+  return [0, Math.PI].map((phase) =>
+    even.map((p, i) => {
+      const a = even[Math.max(0, i - 1)];
+      const b = even[Math.min(even.length - 1, i + 1)];
+      const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const w = amp * Math.sin((2 * Math.PI * i * step) / pitch + phase);
+      return { x: p.x - ((b.z - a.z) / l) * w, z: p.z + ((b.x - a.x) / l) * w };
+    }),
+  );
+}
+
+export function sensorPaths({ runs: single, selfs, trunks = [] }, lat) {
+  const runs = [...single, ...trunks.map((t) => ({ ...t, twisted: true }))];
   const { lane, along, bend, dirOf } = curveKit(lat);
   const keyOf = (a, b) => [a, b].map((n) => `${n.x.toFixed(3)},${n.z.toFixed(3)}`).sort().join('|');
   // how many wires share each channel, to spread them across it
@@ -268,7 +308,7 @@ export function sensorPaths({ runs, selfs }, lat) {
     load.set(k, (load.get(k) ?? 0) + 1);
   }
   const used = new Map();
-  const out = { runs: [], arrows: [], dots: [], rings: [], lane };
+  const out = { runs: [], trunks: [], arrows: [], dots: [], rings: [], lane };
   for (const r of runs) {
     let prev = null;
     const points = [];
@@ -291,7 +331,12 @@ export function sensorPaths({ runs, selfs }, lat) {
       prev = pts;
     }
     const names = r.stops.map(nm);
-    out.runs.push({ group: r.group, hexId: r.hexId, from: names[0], to: names[names.length - 1], via: names.slice(1, -1), points });
+    const run = { group: r.group, hexId: r.hexId, from: names[0], to: names[names.length - 1], via: names.slice(1, -1), points };
+    if (r.twisted) {
+      out.trunks.push({ ...run, strands: twist(points, lane * 0.75, lane * 5) });
+      continue;
+    }
+    out.runs.push(run);
     out.dots.push({ group: r.group, hexId: r.hexId, x: points[0].x, z: points[0].z });
   }
   for (const s of selfs) out.rings.push({ group: s.group, hexId: s.hexId, x: s.node.x, z: s.node.z, node: nm(s.node) });
