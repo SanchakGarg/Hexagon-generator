@@ -406,7 +406,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .seg button:disabled { opacity: 0.4; cursor: default; }
 .seg button:focus-visible { outline: 2px dashed var(--accent); outline-offset: -4px; }
 
-/* layer toggles read like a ticked checklist; each group's kinds hang off it on a pencil line */
+/* layer toggles carry an eye, open when shown and struck through when hidden; each group's kinds hang off it on a pencil line */
 .toggles {
   display: flex;
   flex-direction: column;
@@ -447,24 +447,24 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .toggles button::before {
   content: "";
   flex: none;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--ink);
-  border-radius: 4px 5px 3px 5px;
-  background: var(--page);
-  rotate: -3deg;
+  width: 18px;
+  height: 18px;
+  background: var(--muted);
+  -webkit-mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5-4.8 6.8-4.8S14.8 8 14.8 8s-2.5 4.8-6.8 4.8S1.2 8 1.2 8z'/%3E%3Cpath d='M2.5 13.5 13.5 2.5'/%3E%3C/svg%3E");
+  mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5-4.8 6.8-4.8S14.8 8 14.8 8s-2.5 4.8-6.8 4.8S1.2 8 1.2 8z'/%3E%3Cpath d='M2.5 13.5 13.5 2.5'/%3E%3C/svg%3E");
 }
 
 .toggles button[aria-pressed="true"]::before {
-  background:
-    no-repeat center / 14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 8.5 6.5 12.5 14 3' fill='none' stroke='%23d8577a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
-    var(--page);
+  background: var(--accent);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5-4.8 6.8-4.8S14.8 8 14.8 8s-2.5 4.8-6.8 4.8S1.2 8 1.2 8z'/%3E%3Ccircle cx='8' cy='8' r='2.1'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5-4.8 6.8-4.8S14.8 8 14.8 8s-2.5 4.8-6.8 4.8S1.2 8 1.2 8z'/%3E%3Ccircle cx='8' cy='8' r='2.1'/%3E%3C/svg%3E");
 }
 
+/* some of the group's kinds shown: a half-shut eye */
 .toggles button[aria-pressed="mixed"]::before {
-  background:
-    no-repeat center / 14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5h9' fill='none' stroke='%23d8577a' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E"),
-    var(--page);
+  background: var(--accent);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5 4.8 6.8 4.8S14.8 8 14.8 8M1.2 8h13.6M5.9 8a2.1 2.1 0 0 0 4.2 0'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.2 8s2.5 4.8 6.8 4.8S14.8 8 14.8 8M1.2 8h13.6M5.9 8a2.1 2.1 0 0 0 4.2 0'/%3E%3C/svg%3E");
 }
 
 .toggles button { width: 100%; }

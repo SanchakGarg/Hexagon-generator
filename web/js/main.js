@@ -514,7 +514,7 @@ function setView(next) {
   });
 }
 
-// a group shows ticked when all its kinds are on, half-ticked when only some are
+// a group's eye is open when all its kinds are on, half-shut when only some are
 const groupLayers = (g) => [...document.querySelectorAll(`[data-group-of="${g}"] [data-layer]`)].map((b) => b.dataset.layer);
 
 function applyLayers() {
