@@ -966,7 +966,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring .tdot { fill: var(--w); stroke: var(--page); stroke-width: 1px; pointer-events: none; }
 .wiring .tring { stroke: var(--w); stroke-width: 2px; }
 .wiring.touch .chev { stroke: var(--w); }
-/* the twisted pair on to M: two strands crossing, the one behind a shade darker */
+/* the twisted SDA / SCL pair on to M: two strands crossing, the one behind a shade darker */
 .wiring .twist { stroke: var(--w); stroke-width: 1.8px; }
 .wiring .twist.back { stroke: color-mix(in srgb, var(--w) 65%, var(--ink)); }
 

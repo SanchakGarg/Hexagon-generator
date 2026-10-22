@@ -208,7 +208,7 @@ export function strandPaths({ chains, channels }, lat) {
 //   E2 → e → 6, E3 → c → 3.
 // A shared corner goes with the hexagon that owns it, the same one that names it. Nodes picked on the parts page as
 // having no touch sensor are left out.
-// Each outer node's group then goes on to M as one twisted pair along the spoke beside it: 3 → 4 → M, 6 → 7 → M and
+// Each outer node's group then goes on to M as one twisted SDA / SCL pair along the spoke beside it: 3 → 4 → M, 6 → 7 → M and
 // 9 → 1 → M; a group with no sensor left in it needs none.
 const INNER = [90, 30, 330, 270, 210, 150];
 const HUB_OF_CORNER = { 90: 120, 150: 120, 30: 0, 330: 0, 270: 240, 210: 240 };
@@ -273,7 +273,7 @@ export function buildSensors(hexes, edges, lat, allNodes, noSensor = new Set()) 
 
 // Wall-space polylines for the touch sensor wires: each runs along the channels from its node to its collecting
 // node, side by side where several share a channel; a ring marks a node that takes its own sensor.
-// Two strands wound round a centre line, crossing every half pitch: the twisted pair on the drawing.
+// Two strands wound round a centre line, crossing every half pitch: the twisted SDA / SCL pair on the drawing.
 function twist(points, amp, pitch) {
   const even = [points[0]];
   let s = 0;

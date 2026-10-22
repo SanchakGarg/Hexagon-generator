@@ -113,7 +113,7 @@ function arrowsSvg(arrows, lat, y) {
 
 // The touch sensors view: each node's sensor wire runs to the node that collects it, in that node's colour, with a
 // dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own. Each outer node's
-// group goes on to M as a twisted pair.
+// group goes on to M as a twisted SDA / SCL pair.
 export const groupClass = (g) => (g === 'M' ? 't-m' : `t-${g.slice(1)}`);
 function sensorsSvg(s, lat, y) {
   const out = ['<g class="wiring touch">'];
@@ -126,7 +126,7 @@ function sensorsSvg(s, lat, y) {
   }
   for (const t of s.trunks) {
     const attrs = `data-chain="${t.group}" data-hex="${t.hexId}"`;
-    const tip = `${t.group} · twisted pair from ${t.from} to M\nwired ${[t.from, ...t.via, t.to].join(' → ')}`;
+    const tip = `${t.group} · SDA / SCL twisted pair from ${t.from} to M\nwired ${[t.from, ...t.via, t.to].join(' → ')}`;
     out.push(`<path class="hit" ${attrs} d="${line(t.points, y)}" data-tip="${esc(tip)}"/>`);
     t.strands.forEach((pts, i) => out.push(`<path class="twist${i ? ' back' : ''} ${groupClass(t.group)}" ${attrs} d="${line(pts, y)}"/>`));
   }
