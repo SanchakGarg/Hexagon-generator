@@ -1,7 +1,7 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
-import { buildWiring, strandPaths, channelArrows, buildSensors, sensorPaths } from './wiring.js';
+import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths } from './wiring.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -261,9 +261,10 @@ function update() {
   const topology = labels && wiringView !== 'touch' ? buildWiring(hexes, edges, lattice, allNodes) : null;
   const wiring = topology && wiringView === 'wiring' ? strandPaths(topology, lattice) : null;
   const arrows = topology && wiringView === 'channels' ? channelArrows(topology, lattice) : null;
+  const jumps = arrows && channelJumps(topology, lattice);
   const sensors = labels && wiringView === 'touch' ? sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice) : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows, sensors });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows, channelJumps: jumps, sensors });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);

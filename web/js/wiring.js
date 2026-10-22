@@ -51,7 +51,6 @@ export function buildWiring(hexes, edges, lat, allNodes) {
         const stops = [M, first, X, back, outer, corner];
         if (plate) stops.push(plate);
         const hops = [];
-        let order = 0;
         for (let i = 1; i < stops.length; i++) {
           const from = stops[i - 1];
           const to = stops[i];
@@ -59,8 +58,8 @@ export function buildWiring(hexes, edges, lat, allNodes) {
           const wire = from === X ? 'FREE' : 'SIG';
           const channel = wire === 'SIG' ? { in: from, out: to, onEdge: !!plate && i === stops.length - 1 } : { in: to, out: from, onEdge: false };
           hops.push({ from, to, wire, channel });
-          // order: where the channel sits along its chain, so the data can be shown passing down it
-          if (wire === 'SIG') channels.push({ ...channel, chain: id, hexId: h.id, order: order++ });
+          // order: which hop of its chain the channel carries, so the data can be shown passing down it
+          if (wire === 'SIG') channels.push({ ...channel, chain: id, hexId: h.id, order: i - 1 });
         }
         chains.push({ id, key: id.slice(1), hexId: h.id, side: s, stops, hops, edge: !!plate });
       }
@@ -101,6 +100,38 @@ export function channelArrows({ channels }, lat) {
       u,
     };
   });
+}
+
+// Where each chain's signal leaves the LEDs: the hop back from X on its partner's FREE wire, drawn beside that
+// channel, with the switch onto FREE at X and back onto SIG at the inner node; the LED channels view shows it on hover.
+export function channelJumps({ chains }, lat) {
+  const side = lat.rho * 0.75;
+  const out = [];
+  for (const chain of chains) {
+    chain.hops.forEach((hop, i) => {
+      if (hop.wire !== 'FREE') return;
+      const dx = hop.to.x - hop.from.x;
+      const dz = hop.to.z - hop.from.z;
+      const len = Math.hypot(dx, dz);
+      const u = { x: dx / len, z: dz / len };
+      const n = { x: -u.z * side, z: u.x * side };
+      const end = (p, k) => ({ x: p.x + u.x * lat.rho * k + n.x, z: p.z + u.z * lat.rho * k + n.z });
+      out.push({
+        chain: chain.id,
+        key: chain.key,
+        hexId: chain.hexId,
+        order: i,
+        from: nm(hop.from),
+        to: nm(hop.to),
+        span: [end(hop.from, 1), end(hop.to, -1)],
+        switches: [
+          { x: hop.from.x, z: hop.from.z, node: nm(hop.from), text: 'SIG→FREE' },
+          { x: hop.to.x, z: hop.to.z, node: nm(hop.to), text: 'FREE→SIG' },
+        ],
+      });
+    });
+  }
+  return out;
 }
 
 // Curve helpers shared by every wire drawing: a wire along a channel in a lane, a bend round a node from one wire into

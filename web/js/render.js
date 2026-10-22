@@ -92,8 +92,9 @@ function wiringSvg(w, y) {
 }
 
 // The LED channels view: one arrow along each channel from DIN to DOUT, in the colour of the chain that drives it.
-// A pulse runs down each channel of a hovered chain in turn, like the data passing along it.
-function arrowsSvg(arrows, lat, y) {
+// A hovered chain also shows where its signal leaves the LEDs: a dotted line beside the partner channel it rides
+// back on, and a dotted ring at each switch. A pulse then runs down the chain hop by hop, like the data passing along.
+function arrowsSvg(arrows, jumps, lat, y) {
   const head = lat.rho * 1.1;
   const out = ['<g class="wiring chans">'];
   for (const a of arrows) {
@@ -106,6 +107,14 @@ function arrowsSvg(arrows, lat, y) {
     out.push(`<path class="pulse w-${a.key}" ${attrs} d="${line(a.span, y)}" pathLength="100" stroke-width="${fmt(lat.rho * 0.55)}" style="--i:${a.order}"/>`);
     out.push(`<path class="arrow w-${a.key}" ${attrs} d="${line([a.a, base], y)}"/>`);
     out.push(`<polygon class="head w-${a.key}" ${attrs} points="${tri.map((p) => `${fmt(p.x)},${fmt(y(p.z))}`).join(' ')}"/>`);
+  }
+  for (const j of jumps ?? []) {
+    const attrs = `data-chain="${j.chain}" data-hex="${j.hexId}"`;
+    out.push(`<path class="jump w-${j.key}" ${attrs} d="${line(j.span, y)}"/>`);
+    out.push(`<path class="pulse w-${j.key}" ${attrs} d="${line(j.span, y)}" pathLength="100" stroke-width="${fmt(lat.rho * 0.55)}" style="--i:${j.order}"/>`);
+    for (const s of j.switches) {
+      out.push(`<circle class="jsw w-${j.key}" ${attrs} cx="${fmt(s.x)}" cy="${fmt(y(s.z))}" r="${fmt(lat.rho * 1.35)}" data-tip="${esc(`${j.chain} switches ${s.text} at ${s.node}`)}"/>`);
+    }
   }
   out.push('</g>');
   return out.join('');
@@ -153,7 +162,7 @@ function sensorsSvg(s, lat, y) {
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, sensors = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, channelJumps = null, sensors = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -227,7 +236,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
 
   // labels page: the LED wiring, under the node labels
   if (wiring) parts.push(wiringSvg(wiring, y));
-  if (channelArrows) parts.push(arrowsSvg(channelArrows, lat, y));
+  if (channelArrows) parts.push(arrowsSvg(channelArrows, channelJumps, lat, y));
   if (sensors) parts.push(sensorsSvg(sensors, lat, y));
 
   // labels page: a tiny label at the centre of every node, the same set in each hexagon
