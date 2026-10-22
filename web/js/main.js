@@ -2,6 +2,7 @@ import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
 import { renderWall } from './render.js';
 import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths } from './wiring.js';
+import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -37,7 +38,7 @@ const PRICE = {
   psu: 1115, // 5 V 10 A power supply
   drywall: 1.4,
   m3: 3.5,
-  m3b: 0.95,
+  nut: 0.95,
   standoff: 4.4,
 };
 const rupees = (n) => {
@@ -135,6 +136,7 @@ function renderPicks() {
 
 // what to buy for the wall as it stands, grouped like a shopping list: each section with its own items, prices in
 // rupees, and a grand total at the end. Items without a price yet show -- and leave the totals alone.
+let lastBom = null;
 function renderBom(s, hexes, rim) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
@@ -149,43 +151,44 @@ function renderBom(s, hexes, rim) {
       title: 'LED channels',
       note: `${channels} channel${channels === 1 ? '' : 's'} · ${CHANNEL_CM} cm each`,
       items: [
-        { label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each` },
-        { label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m` },
-        { label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel' },
+        { label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each`, f: `ROUNDUP(LED_channels/${CHANNELS_PER_LENGTH},0)` },
+        { label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m`, f: `ROUNDUP(LED_channels*${LEDS_PER_CHANNEL}/${LEDS_PER_M}/${ROLL_M},0)` },
+        { label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel', f: 'LED_channels*2' },
       ],
     },
     {
       title: 'Nodes',
       note: `${nodes} node${nodes === 1 ? '' : 's'}`,
       items: [
-        { label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node` },
-        { label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart' },
-        { label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon' },
-        { label: 'Touch sensors', qty: nodes - skipped, rate: PRICE.touch, note: skipped ? `1 per node, ${skipped} left out` : '1 per node' },
+        { label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node`, f: `ROUNDUP(Nodes*${NODE_GRAMS}/1000,0)` },
+        { label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart', f: 'Nodes-Central_nodes' },
+        { label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon', f: 'Central_nodes' },
+        { label: 'Touch sensors', qty: nodes - skipped, rate: PRICE.touch, note: skipped ? `1 per node, ${skipped} left out` : '1 per node', f: 'Nodes-Sensors_left_out' },
       ],
     },
     {
       title: 'Network and control',
       note: '1 per hexagon',
       items: [
-        { label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp },
+        { label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp, f: 'Hexagons' },
         { label: 'Ethernet cables', qty: null, rate: null },
-        { label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu },
+        { label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu, f: 'Hexagons' },
       ],
     },
     {
       title: 'Miscellaneous',
       note: 'per node',
       items: [
-        { label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node' },
-        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node' },
-        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3b, note: '3 per node' },
-        { label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node' },
+        { label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node', f: 'Nodes*2' },
+        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node', f: 'Nodes*3' },
+        { label: 'M3 nuts', qty: nodes * 3, rate: PRICE.nut, note: '3 per node', f: 'Nodes*3' },
+        { label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node', f: 'Nodes*3' },
         ...(boardOn && rim.length ? [{ label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
       ],
     },
   ];
   $('bom-for').textContent = `for ${hexes.length} hexagon${hexes.length === 1 ? '' : 's'}`;
+  lastBom = { sections, inputs: { Hexagons: hexes.length, Nodes: nodes, Central_nodes: central, LED_channels: channels, Sensors_left_out: skipped } };
 
   const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
   const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
@@ -222,6 +225,53 @@ function renderBom(s, hexes, rim) {
   out.push(line('line grand', 'Total', unpriced ? `${unpriced} item${unpriced === 1 ? '' : 's'} not priced yet` : '', '', rupees(sum(all))));
   $('bom').replaceChildren(...out);
 }
+
+// The parts list as an Excel workbook to keep and edit: the wall's counts sit in yellow cells at the top, every
+// quantity is a formula on them, and amounts, section subtotals and the total are formulas too, so changing a count
+// or a price, or adding a row inside a section, keeps the sums right.
+function downloadBom() {
+  if (!lastBom) return;
+  const S = STYLES;
+  const rows = [];
+  const names = [];
+  const name = active?.name || 'Hexagon wall';
+  rows.push([{ v: `${name} · parts list`, s: S.title }]);
+  rows.push([{ v: `Made ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · prices in rupees · edit the yellow cells and prices, or insert rows inside a section`, s: S.muted }]);
+  rows.push(null);
+  rows.push([{ v: 'Counts from the wall', s: S.head }, { v: '', s: S.head }]);
+  for (const [k, v] of Object.entries(lastBom.inputs)) {
+    names.push([k, `$B$${rows.length + 1}`]);
+    rows.push([k.replace(/_/g, ' '), { v, s: S.input }]);
+  }
+  rows.push(null);
+  rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note'].map((v) => ({ v, s: S.head })));
+  const totals = [];
+  for (const sec of lastBom.sections) {
+    const head = rows.length + 1;
+    const first = head + 1;
+    const last = head + sec.items.length;
+    totals.push(`D${head}`);
+    const sub = sec.items.reduce((t, i) => t + (i.qty != null && i.rate != null ? i.qty * i.rate : 0), 0);
+    rows.push([{ v: sec.title, s: S.bold }, null, null, { f: `SUM(D${first}:D${last})`, v: sub, s: S.boldMoney }, { v: sec.note ?? '', s: S.muted }]);
+    for (const i of sec.items) {
+      const r = rows.length + 1;
+      const qty = i.f ? { f: i.f, v: i.qty } : i.qty ?? '';
+      const amount = i.qty != null && i.rate != null ? i.qty * i.rate : null;
+      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }]);
+    }
+  }
+  const all = lastBom.sections.flatMap((x) => x.items);
+  const grand = all.reduce((t, i) => t + (i.qty != null && i.rate != null ? i.qty * i.rate : 0), 0);
+  rows.push(null);
+  rows.push([{ v: 'Total', s: S.title }, null, null, { f: totals.join('+'), v: grand, s: S.boldMoney }]);
+  const blob = workbook({ sheetName: 'Parts list', rows, widths: [34, 10, 13, 14, 46], names });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name.replace(/[\\/:*?"<>|]+/g, '-')} parts.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('bom-xlsx').addEventListener('click', downloadBom);
 
 function update() {
   refreshTabStates();

@@ -1108,6 +1108,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .bom { min-width: 330px; margin-top: 4px; }
 .bom-head { display: flex; align-items: baseline; gap: 10px; }
 .bom-head .for { color: var(--muted); font-size: 1.1rem; }
+.bom-head .btn { margin-left: auto; font-size: 1rem; padding: 1px 12px; }
 
 /* save confirmation: a small taped note that pops up at the foot of the page */
 .toast {
