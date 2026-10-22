@@ -709,6 +709,8 @@ function showPlaybook(s, hexes, edges) {
     exportExcel: (bom) => downloadBom(bom),
     share: shareGuide,
     mountParts,
+    // the drawings are stills of the same meshes the other pages show, once they have loaded
+    snapshot: viewer ? (box, width, opts) => viewer.snapshot(box, width, opts) : null,
     rupees,
     formatLength,
     constants: { CHANNEL_CM, LENGTH_CM, CHANNELS_PER_LENGTH, LEDS_PER_CHANNEL, LEDS_PER_M, NODE_GRAMS },
@@ -1244,6 +1246,8 @@ initSections();
 initTheme(() => {
   viewer?.setTheme();
   partView?.setTheme();
+  // the guide's drawings are stills, so they are taken again in the new colours
+  if (page === PLAYBOOK_PAGE && lattice) update();
 });
 
 async function start() {

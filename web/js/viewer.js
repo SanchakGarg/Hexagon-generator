@@ -273,8 +273,7 @@ export async function createViewer(container, geo) {
 
   // Match the SVG overlay exactly: its viewBox is in wall meters with y pointing down from the top edge,
   // and preserveAspectRatio="xMidYMid meet" letterboxes it the same way this frustum does.
-  function fitOrtho() {
-    const { clientWidth: w, clientHeight: h } = container;
+  function fitOrtho(w = container.clientWidth, h = container.clientHeight) {
     if (!viewBox || !wallSize || !w || !h) return;
     const scale = Math.min(w / viewBox.w, h / viewBox.h);
     const cx = viewBox.x + viewBox.w / 2;
@@ -899,6 +898,44 @@ export async function createViewer(container, geo) {
   new ResizeObserver(resize).observe(container);
   resize();
 
+  // A still of the flat front view framed on a viewBox, as a PNG data URL, for the build guide's drawings. Every
+  // part is shown and the overlay's wiring left out; { softLeds } pales the channels as the wiring page does.
+  function snapshot(box, width, { softLeds = false } = {}) {
+    if (!wallSize || !lattice) return null;
+    const height = Math.max(1, Math.round((width * box.h) / box.w));
+    const keep = { viewBox, show, ratio: renderer.getPixelRatio(), ink: ink.uniforms.width.value, wiring: wiringRoot.visible };
+    const led = materials.led.color.clone();
+    viewBox = box;
+    show = {};
+    applyShow();
+    writeNodes();
+    wiringRoot.visible = false;
+    if (softLeds) {
+      const soft = cssColor('--c-led-soft');
+      materials.led.color.copy(soft);
+      materials.led.emissive.copy(soft);
+    }
+    renderer.setPixelRatio(1);
+    renderer.setSize(width, height, false);
+    renderer.getDrawingBufferSize(ink.uniforms.resolution.value);
+    ink.uniforms.width.value = 1.4 * (width / 700);
+    fitOrtho(width, height);
+    renderer.render(scene, ortho);
+    const url = renderer.domElement.toDataURL('image/png');
+    // back as it was
+    materials.led.color.copy(led);
+    materials.led.emissive.copy(led);
+    viewBox = keep.viewBox;
+    show = keep.show;
+    applyShow();
+    writeNodes();
+    wiringRoot.visible = keep.wiring;
+    ink.uniforms.width.value = keep.ink;
+    renderer.setPixelRatio(keep.ratio);
+    resize();
+    return url;
+  }
+
   // --- 2D <-> 3D: fly the perspective camera between a front view that matches the flat drawing and the orbit view
 
   // the perspective view whose picture of the wall plane matches the orthographic frame
@@ -1124,5 +1161,5 @@ export async function createViewer(container, geo) {
     render();
   }
 
-  return { canvas: renderer.domElement, update, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
+  return { canvas: renderer.domElement, update, snapshot, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
 }

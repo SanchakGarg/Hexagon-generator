@@ -1,7 +1,7 @@
 // Page 4, the build guide: a sketchbook that walks from the finished wall down to its parts. A cover with the wall
 // drawn by hand, the steps to make a hexagon, the node's three layers in 3D, one LED channel up close, where every
 // node and channel goes (a hexagon at a time), and the parts list, which can be edited, added to and exported.
-import { hexPoints, sketch, esc, arrowsSvg } from './render.js';
+import { hexPoints, sketch, esc } from './render.js';
 import { chainPath } from './wiring.js';
 
 const fmt = (v) => +v.toFixed(5);
@@ -54,10 +54,10 @@ function frameOf(L, only = null) {
   return { x: x0, y: y0, w: Math.max(...xs) + pad - x0, h: Math.max(...ys) + pad - y0 };
 }
 
-const hexOutlines = (L, y, faint = () => false) =>
-  L.hexes.map((x) => `<g class="pb-hex${faint(x) ? ' faint' : ''}" data-hex="${x.id}"><polygon class="fill" points="${hexPoints(x.x, y(x.z), L.lat.R, 0)}"/>${sketch(x.x, y(x.z), L.lat.R, x.id)}</g>`).join('');
+const hexOutlines = (L, y) =>
+  L.hexes.map((x) => `<g class="pb-hex" data-hex="${x.id}"><polygon class="fill" points="${hexPoints(x.x, y(x.z), L.lat.R, 0)}"/>${sketch(x.x, y(x.z), L.lat.R, x.id)}</g>`).join('');
 
-const edgeStrips = (L, y, faint = () => false) =>
+const edgeStrips = (L, y) =>
   L.edges
     .map((e) => {
       const ux = Math.cos(rad(e.angle));
@@ -69,12 +69,12 @@ const edgeStrips = (L, y, faint = () => false) =>
         [e.tipX + uz * w, e.tipZ - ux * w],
         [e.x + uz * w, e.z - ux * w],
       ];
-      return `<polygon class="pb-edge${faint(e) ? ' faint' : ''}" points="${pts.map(([px, pz]) => `${fmt(px)},${fmt(y(pz))}`).join(' ')}"/>`;
+      return `<polygon class="pb-edge" points="${pts.map(([px, pz]) => `${fmt(px)},${fmt(y(pz))}`).join(' ')}"/>`;
     })
     .join('');
 
 // an LED channel as a painted-black bar with its LEDs dotted along it
-function channelBars(L, channels, y, faint = () => false) {
+function channelBars(L, channels, y) {
   const rho = L.lat.rho;
   return channels
     .map((c) => {
@@ -84,39 +84,130 @@ function channelBars(L, channels, y, faint = () => false) {
       const a = { x: c.in.x + (dx / len) * rho * 1.1, z: c.in.z + (dz / len) * rho * 1.1 };
       const b = { x: c.out.x - (dx / len) * rho * 1.1, z: c.out.z - (dz / len) * rho * 1.1 };
       const d = `M${fmt(a.x)},${fmt(y(a.z))}L${fmt(b.x)},${fmt(y(b.z))}`;
-      const cls = faint(c) ? ' faint' : '';
-      return `<path class="pb-chan${cls}" d="${d}" stroke-width="${fmt(rho * 0.7)}"/><path class="pb-leds${cls}" d="${d}" pathLength="15" stroke-width="${fmt(rho * 0.3)}"/>`;
+      return `<path class="pb-chan" d="${d}" stroke-width="${fmt(rho * 0.7)}"/><path class="pb-leds" d="${d}" pathLength="15" stroke-width="${fmt(rho * 0.3)}"/>`;
     })
     .join('');
 }
 
-// a node as a small hexagon in its kind's colour, with a tiny arrow for the way its node-1 side points
-function nodeMarks(L, nodes, y, { arrows = false, labels = false, faint = () => false, scale = 1 } = {}) {
+// --- hand-drawn marks: every line wobbles a little and is gone over twice, the same way each time for one seed --------
+
+function rng(seed) {
+  let v = 2166136261;
+  for (const ch of String(seed)) v = Math.imul(v ^ ch.charCodeAt(0), 16777619);
+  return () => {
+    v = Math.imul(v ^ (v >>> 15), 2246822507);
+    v = Math.imul(v ^ (v >>> 13), 3266489909);
+    return ((v ^= v >>> 16) >>> 0) / 4294967296 - 0.5;
+  };
+}
+
+// a pencil line through points (already in SVG units): each stretch bows a touch and its ends miss a little
+function wobbly(pts, seed, j, closed = false) {
+  const r = rng(seed);
+  const p = pts.map(([px, py]) => [px + r() * j, py + r() * j]);
+  if (closed) p.push([p[0][0] + r() * j * 0.6, p[0][1] + r() * j * 0.6]);
+  let d = `M${fmt(p[0][0])},${fmt(p[0][1])}`;
+  for (let i = 1; i < p.length; i++) {
+    const [x0, y0] = p[i - 1];
+    const [x1, y1] = p[i];
+    const bow = r() * Math.hypot(x1 - x0, y1 - y0) * 0.09;
+    const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+    const cx = (x0 + x1) / 2 - ((y1 - y0) / len) * bow;
+    const cy = (y0 + y1) / 2 + ((x1 - x0) / len) * bow;
+    d += `Q${fmt(cx)},${fmt(cy)} ${fmt(x1)},${fmt(y1)}`;
+  }
+  return d;
+}
+
+const hexCorners = (cx, cy, r) => Array.from({ length: 6 }, (_, k) => [cx + r * Math.cos(rad(30 + 60 * k)), cy - r * Math.sin(rad(30 + 60 * k))]);
+
+// an arrow drawn by hand from a to b (SVG units): a bowed shaft and an open head of two quick strokes, each gone
+// over twice, on a pale halo so it reads over the drawing under it
+function handArrow(a, b, seed, head, cls, attrs = '', inner = '') {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  const n = [-u[1], u[0]];
+  const back = (s) => [b[0] - u[0] * head + n[0] * head * s, b[1] - u[1] * head + n[1] * head * s];
+  const j = head * 0.12;
+  const strokes = [
+    wobbly([a, b], `${seed}s`, j),
+    wobbly([back(0.55), b], `${seed}l`, j * 0.5),
+    wobbly([back(-0.55), b], `${seed}r`, j * 0.5),
+  ];
+  const again = [wobbly([a, b], `${seed}s2`, j * 1.6), wobbly([back(0.6), b, back(-0.5)], `${seed}h2`, j)];
+  return `<g class="hand-arrow ${cls}" ${attrs}>${strokes.map((d) => `<path class="halo" d="${d}"/>`).join('')}${strokes.map((d) => `<path class="ink" d="${d}"/>`).join('')}${again.map((d) => `<path class="ink again" d="${d}"/>`).join('')}${inner}</g>`;
+}
+
+// a node as a small hexagon washed in its kind's colour, the wash a little off the pencil line as paint would be,
+// with a hand-drawn arrow for the way its node-1 side points
+function nodeMarks(L, nodes, y, { arrows = false, labels = false, scale = 1 } = {}) {
   const r = L.lat.rho * scale;
   return nodes
     .map((n) => {
-      const cls = faint(n) ? ' faint' : '';
-      let out = `<polygon class="pb-node k-${n.kind}${cls}" points="${hexPoints(n.x, y(n.z), r, 0)}"><title>${esc(`${n.label ?? ''} · ${KIND_NAMES[n.kind] ?? n.kind}`)}</title></polygon>`;
+      const seed = n.key ?? `${n.hexId}${n.label}`;
+      const cx = n.x;
+      const cy = y(n.z);
+      const j = r * 0.09;
+      let out = `<g class="pb-node k-${n.kind}"><title>${esc(`${n.label ?? ''} · ${KIND_NAMES[n.kind] ?? n.kind}`)}</title>`;
+      out += `<path class="wash" d="${wobbly(hexCorners(cx + r * 0.1, cy + r * 0.08, r * 0.96), `${seed}w`, j * 1.4, true)}"/>`;
+      out += `<path class="ink" d="${wobbly(hexCorners(cx, cy, r), `${seed}a`, j, true)}"/>`;
+      out += `<path class="ink again" d="${wobbly(hexCorners(cx, cy, r * 0.97), `${seed}b`, j * 1.3, true)}"/></g>`;
       if (arrows && n.facing != null) {
-        const u = { x: Math.cos(rad(n.facing)), z: Math.sin(rad(n.facing)) };
-        const n2 = { x: -u.z, z: u.x };
-        const tail = { x: n.x + u.x * r * 0.95, z: n.z + u.z * r * 0.95 };
-        const tip = { x: n.x + u.x * r * 2.9, z: n.z + u.z * r * 2.9 };
-        const base = { x: n.x + u.x * r * 2.1, z: n.z + u.z * r * 2.1 };
-        const k = r * 0.55;
-        out += `<path class="pb-face${cls}" d="M${fmt(tail.x)},${fmt(y(tail.z))}L${fmt(base.x)},${fmt(y(base.z))}"/>`;
-        out += `<polygon class="pb-face-head${cls}" points="${fmt(tip.x)},${fmt(y(tip.z))} ${fmt(base.x + n2.x * k)},${fmt(y(base.z + n2.z * k))} ${fmt(base.x - n2.x * k)},${fmt(y(base.z - n2.z * k))}"/>`;
+        const u = [Math.cos(rad(n.facing)), -Math.sin(rad(n.facing))];
+        out += handArrow([cx + u[0] * r * 1.05, cy + u[1] * r * 1.05], [cx + u[0] * r * 2.9, cy + u[1] * r * 2.9], `${seed}f`, r * 0.7, 'pb-face');
       }
-      if (labels) out += `<text class="pb-nlabel${cls}" x="${fmt(n.x)}" y="${fmt(y(n.z))}" font-size="${fmt(r * 0.95)}">${esc(n.label ?? '')}</text>`;
+      if (labels) out += `<text class="pb-nlabel" x="${fmt(cx)}" y="${fmt(cy)}" font-size="${fmt(r * 0.95)}">${esc(n.label ?? '')}</text>`;
       return out;
     })
     .join('');
 }
 
+// each LED channel's DIN → DOUT arrow, drawn by hand in the colour of the chain that drives it
+const channelArrowsSvg = (arrows, lat, y) =>
+  `<g class="pb-arrows">${arrows
+    .map((a) => {
+      const tip = `Channel ${a.channel} · ${a.chain}\nDIN @ ${a.din} → DOUT @ ${a.dout}`;
+      return handArrow([a.a.x, y(a.a.z)], [a.b.x, y(a.b.z)], `${a.hexId}${a.channel}`, lat.rho * 1.2, `w-${a.key}`, '', `<title>${esc(tip)}</title>`);
+    })
+    .join('')}</g>`;
+
 // nodes that sit on a hexagon: inside or on its outline, and the plates on its own Edges
 function nodesOf(L, allNodes, hex) {
   return allNodes.filter((n) => n.hexId === hex.id || Math.hypot(n.x - hex.x, n.z - hex.z) <= L.lat.R * 1.02);
 }
+
+let clipSeq = 0;
+
+// The wall as page 3 draws it, from the URDF meshes, under the guide's own marks. A single hexagon is cut out
+// along its own frame, nodes and Edges, so nothing of its neighbours shows. Without meshes it falls back to outlines.
+function baseDrawing(ctx, L, box, y, { hex = null, channels = null, softLeds = false } = {}) {
+  const { lat } = L;
+  const hexes = hex ? [hex] : L.hexes;
+  const edges = hex ? L.edges.filter((e) => e.hexId === hex.id) : L.edges;
+  const width = hex ? 1100 : 1600;
+  const url = ctx.snapshot?.(box, width, { softLeds });
+  if (!url) {
+    const chans = channels ?? [];
+    return edgeStrips({ ...L, edges }, y) + hexOutlines({ ...L, hexes }, y) + channelBars(L, hex ? chans.filter((c) => c.hexId === hex.id) : chans, y);
+  }
+  let clip = '';
+  let attr = '';
+  if (hex) {
+    const id = `pb-clip-${++clipSeq}`;
+    const mine = nodesOf(L, ctx.allNodes, hex);
+    const shapes = [
+      `<polygon points="${hexPoints(hex.x, y(hex.z), lat.R + lat.rho * 0.7, 0)}"/>`,
+      ...mine.map((n) => `<circle cx="${fmt(n.x)}" cy="${fmt(y(n.z))}" r="${fmt(lat.rho * 1.35)}"/>`),
+      edgeStrips({ ...L, edges, lat: { ...lat, rho: lat.rho * 2.6 } }, y),
+    ];
+    clip = `<clipPath id="${id}">${shapes.join('')}</clipPath>`;
+    attr = ` clip-path="url(#${id})"`;
+  }
+  return `${clip}<image class="pb-render" href="${url}" x="${fmt(box.x)}" y="${fmt(box.y)}" width="${fmt(box.w)}" height="${fmt(box.h)}" preserveAspectRatio="none"${attr}/>`;
+}
+
+// see-through hexagons over a drawing, to click one
+const pickHexes = (L, y) => L.hexes.map((x) => `<polygon class="pb-pick" data-hex="${x.id}" points="${hexPoints(x.x, y(x.z), L.lat.R, 0)}"/>`).join('');
 
 // ◀ H3 of 12 ▶ with a dropdown, over a drawing of the one hexagon
 function browser(kind, L, draw) {
@@ -447,7 +538,7 @@ export function renderPlaybook(root, ctx) {
     { class: 'sheet cover' },
     h('p', { class: 'kicker' }, 'Build guide'),
     h('h1', {}, ctx.name),
-    svgEl(whole, hexOutlines(L, y) + edgeStrips(L, y) + channelBars(L, channels, y) + nodeMarks(L, ctx.allNodes, y), 'pb-wall'),
+    svgEl(whole, ctx.snapshot ? baseDrawing(ctx, L, whole, y) : baseDrawing(ctx, L, whole, y, { channels }) + nodeMarks(L, ctx.allNodes, y), 'pb-wall'),
     h('p', { class: 'caption' }, `${plural(L.hexes.length, 'hexagon')} · ${plural(c.leds, 'LED channel')} · ${c.leds * K.LEDS_PER_CHANNEL} LEDs · ${plural(c.nodes, 'node')}`),
     h('h3', {}, 'The hexagon project'),
     h('p', {}, 'A hexagon wall is a honeycomb of light. Every side of every hexagon is an LED channel: a strip of tiny lights in a black aluminium channel. Where the sides meet sits a node, a small 3D-printed stack that holds the channel ends, the wiring and a touch sensor. At the centre of each hexagon is its own brain, the MCU node M, with an ESP32 that drives that hexagon’s lights.'),
@@ -523,8 +614,7 @@ export function renderPlaybook(root, ctx) {
   const nodeBrowser = browser('nodes', L, (hex) => {
     const mine = new Set(nodesOf(L, ctx.allNodes, hex));
     const box = frameOf(L, hex);
-    const faint = (n) => !mine.has(n);
-    const drawing = svgEl(box, hexOutlines(L, y, (x) => x.id !== hex.id) + edgeStrips(L, y, (e) => e.hexId !== hex.id) + nodeMarks(L, ctx.allNodes, y, { arrows: true, labels: true, faint, scale: 1.4 }), 'pb-zoom');
+    const drawing = svgEl(box, baseDrawing(ctx, L, box, y, { hex }) + nodeMarks(L, [...mine], y, { arrows: true, labels: true, scale: 1.4 }), 'pb-zoom');
     const corners = [...mine].filter((n) => /^[a-f]$/.test(n.label ?? ''));
     const borrowed = corners.filter((n) => n.hexId !== hex.id);
     const kinds = {};
@@ -543,7 +633,7 @@ export function renderPlaybook(root, ctx) {
     4,
     'Node placements',
     h('p', {}, 'Here is the wall with just its hexagon outlines and where each node sits. Every node is turned a set way: the tiny arrow shows where its node-1 side points. Click a hexagon, or step through them below, to see one at a time.'),
-    svgEl(whole, hexOutlines(L, y) + edgeStrips(L, y) + nodeMarks(L, ctx.allNodes, y, { arrows: true }), 'pb-wall pick'),
+    svgEl(whole, baseDrawing(ctx, L, whole, y) + nodeMarks(L, ctx.allNodes, y, { arrows: true }) + pickHexes(L, y), 'pb-wall pick'),
     h('div', { class: 'pb-legend' }, ['mcu', 'normal', 'edge', '2way', '3way'].map((k) => h('span', {}, h('i', { class: `sw k-${k}` }), KIND_NAMES[k]))),
     nodeBrowser,
   );
@@ -552,12 +642,9 @@ export function renderPlaybook(root, ctx) {
   const chanBrowser = browser('channels', L, (hex) => {
     const box = frameOf(L, hex);
     const arrows = ctx.arrows.filter((a) => a.hexId === hex.id);
-    const others = ctx.arrows.filter((a) => a.hexId !== hex.id);
-    const drawing = svgEl(
-      box,
-      hexOutlines(L, y, (x) => x.id !== hex.id) + edgeStrips(L, y, (e) => e.hexId !== hex.id) + nodeMarks(L, ctx.allNodes, y, { labels: true, faint: (n) => n.hexId !== hex.id && Math.hypot(n.x - hex.x, n.z - hex.z) > lat.R * 1.02, scale: 1.4 }) + `<g class="faint">${arrowsSvg(others, null, lat, y)}</g>` + arrowsSvg(arrows, null, lat, y),
-      'pb-zoom',
-    );
+    const mine = nodesOf(L, ctx.allNodes, hex);
+    const marks = ctx.snapshot ? mine.map((n) => `<text class="pb-nlabel on-render" x="${fmt(n.x)}" y="${fmt(y(n.z))}" font-size="${fmt(lat.rho * 1.1)}" stroke-width="${fmt(lat.rho * 0.3)}">${esc(n.label ?? '')}</text>`).join('') : nodeMarks(L, mine, y, { labels: true, scale: 1.4 });
+    const drawing = svgEl(box, baseDrawing(ctx, L, box, y, { hex, channels, softLeds: true }) + marks + channelArrowsSvg(arrows, lat, y), 'pb-zoom');
     const chains = ctx.topology.chains.filter((x) => x.hexId === hex.id).sort((a, b) => a.id.localeCompare(b.id));
     return [
       drawing,
@@ -569,7 +656,7 @@ export function renderPlaybook(root, ctx) {
     5,
     'LED channel placements',
     h('p', {}, 'Every LED channel has a direction: data goes in at DIN and out at DOUT. Fit each channel so its arrow points the way shown, in the colour of the chain that drives it. Click a hexagon, or step through them below.'),
-    svgEl(whole, hexOutlines(L, y) + edgeStrips(L, y) + arrowsSvg(ctx.arrows, null, lat, y), 'pb-wall pick'),
+    svgEl(whole, baseDrawing(ctx, L, whole, y, { softLeds: true }) + channelArrowsSvg(ctx.arrows, lat, y) + pickHexes(L, y), 'pb-wall pick'),
     h('div', { class: 'pb-legend' }, [1, 2, 3, 4, 5, 6].map((k) => h('span', { class: `w-${k}` }, h('i', { class: 'sw' }), `L${k}`))),
     chanBrowser,
   );

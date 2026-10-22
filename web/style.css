@@ -1417,18 +1417,28 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .pb-edge { fill: color-mix(in srgb, var(--c-hex) 60%, transparent); stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pb-chan { stroke: #1d1c26; stroke-linecap: round; fill: none; }
 .pb-leds { stroke: #ffd66b; stroke-dasharray: 0.12 0.88; stroke-dashoffset: -0.44; stroke-linecap: round; fill: none; }
-.pb-node { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; fill: var(--page); }
-.pb-node.k-mcu, .sw.k-mcu { fill: var(--c-mcu); background: var(--c-mcu); }
-.pb-node.k-normal, .sw.k-normal { fill: var(--c-hex); background: var(--c-hex); }
-.pb-node.k-edge, .sw.k-edge { fill: var(--c-edge); background: var(--c-edge); }
-.pb-node.k-2way, .sw.k-2way { fill: var(--c-2way); background: var(--c-2way); }
-.pb-node.k-3way, .sw.k-3way { fill: var(--c-3way); background: var(--c-3way); }
-.pb-face { stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; fill: none; }
-.pb-face-head { fill: var(--accent); }
+.pb-render { image-rendering: auto; }
+.pb-pick { fill: transparent; cursor: pointer; }
+.pb-pick:hover { fill: color-mix(in srgb, var(--mint) 35%, transparent); }
+/* nodes: a wash of the kind's colour a little off a double pencil line */
+.pb-node .wash { stroke: none; opacity: 0.92; }
+.pb-node .ink { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.pb-node .ink.again { stroke-width: 0.8; opacity: 0.55; }
+.pb-node.k-mcu .wash, .sw.k-mcu { fill: var(--c-mcu); background: var(--c-mcu); }
+.pb-node.k-normal .wash, .sw.k-normal { fill: var(--c-hex); background: var(--c-hex); }
+.pb-node.k-edge .wash, .sw.k-edge { fill: var(--c-edge); background: var(--c-edge); }
+.pb-node.k-2way .wash, .sw.k-2way { fill: var(--c-2way); background: var(--c-2way); }
+.pb-node.k-3way .wash, .sw.k-3way { fill: var(--c-3way); background: var(--c-3way); }
+/* arrows: quick pen strokes with an open head, gone over twice, on a halo of paper */
+.hand-arrow path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.hand-arrow .halo { stroke: var(--page); stroke-width: 6px; opacity: 0.85; }
+.hand-arrow .ink { stroke: var(--w, var(--ink)); stroke-width: 2.6px; }
+.hand-arrow .ink.again { stroke-width: 1.1px; opacity: 0.6; }
+.pb-face { --w: var(--accent); }
+.pb-zoom .hand-arrow .halo { stroke-width: 7px; }
+.pb-zoom .hand-arrow .ink { stroke-width: 3.2px; }
 .pb-nlabel { fill: var(--ink); font-family: var(--mono); font-weight: 600; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
-svg .faint { opacity: 0.25; }
-.pb-hex.faint .sketch { stroke-dasharray: 3 5; }
-.pb-zoom .wiring .arrow, .pb-wall .wiring .arrow { stroke-width: 3px; }
+.pb-nlabel.on-render { paint-order: stroke; stroke: var(--page); stroke-linejoin: round; }
 
 .pb-legend, .pb-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 6px 0 12px; font-size: 1.1rem; }
 .pb-legend span, .pb-key span { display: inline-flex; align-items: center; gap: 6px; }
