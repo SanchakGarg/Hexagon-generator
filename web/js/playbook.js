@@ -187,7 +187,8 @@ function nodesOf(L, allNodes, hex) {
 let clipSeq = 0;
 
 // The wall as page 3 draws it, from the URDF meshes, under the guide's own marks. A single hexagon is cut out
-// along its own frame, nodes and Edges, so nothing of its neighbours shows. Without meshes it falls back to outlines.
+// along its own frame, nodes and Edges, over a pale shadow of its neighbours that stays within the hexagon's box.
+// Without meshes it falls back to outlines.
 function baseDrawing(ctx, L, box, y, { hex = null, channels = null, softLeds = false } = {}) {
   const { lat } = L;
   const hexes = hex ? [hex] : L.hexes;
@@ -198,20 +199,17 @@ function baseDrawing(ctx, L, box, y, { hex = null, channels = null, softLeds = f
     const chans = channels ?? [];
     return edgeStrips({ ...L, edges }, y) + hexOutlines({ ...L, hexes }, y) + channelBars(L, hex ? chans.filter((c) => c.hexId === hex.id) : chans, y);
   }
-  let clip = '';
-  let attr = '';
-  if (hex) {
-    const id = `pb-clip-${++clipSeq}`;
-    const mine = nodesOf(L, ctx.allNodes, hex);
-    const shapes = [
-      `<polygon points="${hexPoints(hex.x, y(hex.z), lat.R + lat.rho * 0.7, 0)}"/>`,
-      ...mine.map((n) => `<circle cx="${fmt(n.x)}" cy="${fmt(y(n.z))}" r="${fmt(lat.rho * 1.35)}"/>`),
-      edgeStrips({ ...L, edges, lat: { ...lat, rho: lat.rho * 2.6 } }, y),
-    ];
-    clip = `<clipPath id="${id}">${shapes.join('')}</clipPath>`;
-    attr = ` clip-path="url(#${id})"`;
-  }
-  return `${clip}<image class="pb-render" href="${url}" x="${fmt(box.x)}" y="${fmt(box.y)}" width="${fmt(box.w)}" height="${fmt(box.h)}" preserveAspectRatio="none"${attr}/>`;
+  const image = (id) => `<image class="pb-render" id="${id}" href="${url}" x="${fmt(box.x)}" y="${fmt(box.y)}" width="${fmt(box.w)}" height="${fmt(box.h)}" preserveAspectRatio="none"/>`;
+  if (!hex) return image(`pb-img-${++clipSeq}`);
+  // the neighbours stay as a pale shadow inside the hexagon's own box; the hexagon itself is drawn in full over it
+  const n = ++clipSeq;
+  const mine = nodesOf(L, ctx.allNodes, hex);
+  const shapes = [
+    `<polygon points="${hexPoints(hex.x, y(hex.z), lat.R + lat.rho * 0.7, 0)}"/>`,
+    ...mine.map((m) => `<circle cx="${fmt(m.x)}" cy="${fmt(y(m.z))}" r="${fmt(lat.rho * 1.35)}"/>`),
+    edgeStrips({ ...L, edges, lat: { ...lat, rho: lat.rho * 2.6 } }, y),
+  ];
+  return `<clipPath id="pb-clip-${n}">${shapes.join('')}</clipPath><g class="pb-shadow">${image(`pb-img-${n}`)}</g><use href="#pb-img-${n}" clip-path="url(#pb-clip-${n})"/>`;
 }
 
 // see-through hexagons over a drawing, to click one
