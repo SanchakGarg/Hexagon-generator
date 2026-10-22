@@ -315,6 +315,29 @@ export function labelHexNodes(hexNodes) {
   return hexNodes;
 }
 
+// URDF rpy as a 3×3 rotation: about X, then Y, then Z, all on fixed axes
+function rpyMatrix([r, p, y]) {
+  const [cr, sr, cp, sp, cy, sy] = [Math.cos(r), Math.sin(r), Math.cos(p), Math.sin(p), Math.cos(y), Math.sin(y)];
+  return [
+    [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+    [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+    [-sp, cp * sr, cp * cr],
+  ];
+}
+
+// Which way a plate stack's node-1 points in the wall plane (degrees from +X toward +Z), for a stack whose middle
+// plate is drawn with rpy in some model, given that the Node model draws its own middle plate with nodeRpy.
+export function plateFacing(rpy, nodeRpy, lat) {
+  const a = rad(lat.nodeAngles[FACING_FRAME]);
+  const n = rpyMatrix(nodeRpy);
+  const h = rpyMatrix(rpy);
+  const v = [Math.cos(a), 0, Math.sin(a)];
+  // back out of the Node model's plate turn (its transpose), then into this one
+  const local = [0, 1, 2].map((i) => n[0][i] * v[0] + n[1][i] * v[1] + n[2][i] * v[2]);
+  const out = h.map((row) => row[0] * local[0] + row[1] * local[1] + row[2] * local[2]);
+  return deg(Math.atan2(out[2], out[0]));
+}
+
 // Every node on the wall at its wall position: the ones built into hexagons (from the hexagon model's plate stacks)
 // and Edges, and the joining nodes. Keys are measured from the first grid hexagon, which moves with the whole grid,
 // so a pick survives excluding and restoring hexagons.
@@ -322,16 +345,16 @@ export function placeAllNodes(hexes, nodes, edges, lat, origin) {
   const out = [];
   for (const h of hexes) {
     for (const n of lat.hexNodes) {
-      out.push({ x: h.x + n.dx, z: h.z + n.dz, kind: n.mcu ? 'mcu' : 'normal', hexId: h.id, label: n.label });
+      out.push({ x: h.x + n.dx, z: h.z + n.dz, kind: n.mcu ? 'mcu' : 'normal', hexId: h.id, label: n.label, facing: n.facing });
     }
   }
   // an Edge's plate stack sits halfway along it
   for (const e of edges) {
-    out.push({ x: (e.x + e.tipX) / 2, z: (e.z + e.tipZ) / 2, kind: 'normal', hexId: e.hexId, label: EDGE_LABELS[e.side] });
+    out.push({ x: (e.x + e.tipX) / 2, z: (e.z + e.tipZ) / 2, kind: 'normal', hexId: e.hexId, label: EDGE_LABELS[e.side], facing: lat.edge.plateFacing == null ? null : norm(lat.edge.plateFacing + e.rotation) });
   }
   for (const n of nodes) {
     const own = n.joints.find((j) => j.hexId === n.hexId);
-    out.push({ x: n.x, z: n.z, kind: n.kind.replace('-', ''), hexId: n.hexId, label: CORNER_LABELS[lat.cornerOf[own.hexFrame]] });
+    out.push({ x: n.x, z: n.z, kind: n.kind.replace('-', ''), hexId: n.hexId, label: CORNER_LABELS[lat.cornerOf[own.hexFrame]], facing: norm(n.rotation + lat.nodeAngles[FACING_FRAME]) });
   }
   for (const n of out) n.key = `${Math.round((n.x - origin.x) * 1000)},${Math.round((n.z - origin.z) * 1000)}`;
   return out;

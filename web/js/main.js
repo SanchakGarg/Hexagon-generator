@@ -1,9 +1,10 @@
 import { loadGeometry } from './urdf.js';
-import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes } from './layout.js';
+import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes, plateFacing } from './layout.js';
 import { renderWall } from './render.js';
 import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths } from './wiring.js';
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
+import { renderPlaybook } from './playbook.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
@@ -15,9 +16,10 @@ const HINTS = {
   touch: 'Hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
 };
-const PAGES = ['Configure', 'Parts list', 'Connections and wiring'];
+const PAGES = ['Configure', 'Parts list', 'Connections and wiring', 'Build guide'];
 const PARTS_PAGE = 2;
 const LABELS_PAGE = 3;
+const PLAYBOOK_PAGE = 4;
 // LED channels are cut 27 cm long from 2 m lengths, so each length gives 7; each channel holds 15 LEDs of a
 // 60-per-metre WS2812B strip that comes in 5 m rolls
 const CHANNEL_CM = 27;
@@ -130,7 +132,7 @@ function renderPicks() {
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
   // the labels page only shows, so nothing is picked there
-  pickBar.hidden = page === LABELS_PAGE || (sel === 0 && exc === 0);
+  pickBar.hidden = page === LABELS_PAGE || page === PLAYBOOK_PAGE || (sel === 0 && exc === 0);
   hint.classList.toggle('pushed', !pickBar.hidden);
 }
 
@@ -151,39 +153,39 @@ function renderBom(s, hexes, rim) {
       title: 'LED channels',
       note: `${channels} channel${channels === 1 ? '' : 's'} · ${CHANNEL_CM} cm each`,
       items: [
-        { label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each`, f: `ROUNDUP(LED_channels/${CHANNELS_PER_LENGTH},0)` },
-        { label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m`, f: `ROUNDUP(LED_channels*${LEDS_PER_CHANNEL}/${LEDS_PER_M}/${ROLL_M},0)` },
-        { label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel', f: 'LED_channels*2' },
+        { key: 'channel', label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each`, f: `ROUNDUP(LED_channels/${CHANNELS_PER_LENGTH},0)` },
+        { key: 'strip', label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m`, f: `ROUNDUP(LED_channels*${LEDS_PER_CHANNEL}/${LEDS_PER_M}/${ROLL_M},0)` },
+        { key: 'conn2510', label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel', f: 'LED_channels*2' },
       ],
     },
     {
       title: 'Nodes',
       note: `${nodes} node${nodes === 1 ? '' : 's'}`,
       items: [
-        { label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node`, f: `ROUNDUP(Nodes*${NODE_GRAMS}/1000,0)` },
-        { label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart', f: 'Nodes-Central_nodes' },
-        { label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon', f: 'Central_nodes' },
-        { label: 'Touch sensors', qty: nodes - skipped, rate: PRICE.touch, note: skipped ? `1 per node, ${skipped} left out` : '1 per node', f: 'Nodes-Sensors_left_out' },
+        { key: 'filament', label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node`, f: `ROUNDUP(Nodes*${NODE_GRAMS}/1000,0)` },
+        { key: 'pcb', label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart', f: 'Nodes-Central_nodes' },
+        { key: 'central', label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon', f: 'Central_nodes' },
+        { key: 'touch', label: 'Touch sensors', qty: nodes - skipped, rate: PRICE.touch, note: skipped ? `1 per node, ${skipped} left out` : '1 per node', f: 'Nodes-Sensors_left_out' },
       ],
     },
     {
       title: 'Network and control',
       note: '1 per hexagon',
       items: [
-        { label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp, f: 'Hexagons' },
-        { label: 'Ethernet cables', qty: null, rate: null },
-        { label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu, f: 'Hexagons' },
+        { key: 'esp', label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp, f: 'Hexagons' },
+        { key: 'ethernet', label: 'Ethernet cables', qty: null, rate: null },
+        { key: 'psu', label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu, f: 'Hexagons' },
       ],
     },
     {
       title: 'Miscellaneous',
       note: 'per node',
       items: [
-        { label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node', f: 'Nodes*2' },
-        { label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node', f: 'Nodes*3' },
-        { label: 'M3 nuts', qty: nodes * 3, rate: PRICE.nut, note: '3 per node', f: 'Nodes*3' },
-        { label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node', f: 'Nodes*3' },
-        ...(boardOn && rim.length ? [{ label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
+        { key: 'drywall', label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node', f: 'Nodes*2' },
+        { key: 'm3', label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node', f: 'Nodes*3' },
+        { key: 'nut', label: 'M3 nuts', qty: nodes * 3, rate: PRICE.nut, note: '3 per node', f: 'Nodes*3' },
+        { key: 'standoff', label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node', f: 'Nodes*3' },
+        ...(boardOn && rim.length ? [{ key: 'board', label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
       ],
     },
   ];
@@ -228,9 +230,11 @@ function renderBom(s, hexes, rim) {
 
 // The parts list as an Excel workbook to keep and edit: the wall's counts sit in yellow cells at the top, every
 // quantity is a formula on them, and amounts, section subtotals and the total are formulas too, so changing a count
-// or a price, or adding a row inside a section, keeps the sums right.
-function downloadBom() {
-  if (!lastBom) return;
+// or a price, or adding a row inside a section, keeps the sums right. The build guide passes its own edited list,
+// with descriptions, links and added rows; a quantity typed over there is written as typed.
+function downloadBom(bom = lastBom) {
+  if (!bom) return;
+  const edited = bom !== lastBom;
   const S = STYLES;
   const rows = [];
   const names = [];
@@ -239,17 +243,18 @@ function downloadBom() {
   rows.push([{ v: `Made ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · prices in rupees · edit the yellow cells and prices, or insert rows inside a section`, s: S.muted }]);
   rows.push(null);
   rows.push([{ v: 'Counts from the wall', s: S.head }, { v: '', s: S.head }]);
-  for (const [k, v] of Object.entries(lastBom.inputs)) {
+  for (const [k, v] of Object.entries(bom.inputs)) {
     names.push([k, `$B$${rows.length + 1}`]);
     rows.push([k.replace(/_/g, ' '), { v, s: S.input }]);
   }
   rows.push(null);
-  rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note'].map((v) => ({ v, s: S.head })));
+  rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note', ...(edited ? ['Description', 'Link / contact'] : [])].map((v) => ({ v, s: S.head })));
   const totals = [];
-  for (const sec of lastBom.sections) {
+  for (const sec of bom.sections) {
+    // an empty section still gets its heading row, so rows can be inserted under it
     const head = rows.length + 1;
     const first = head + 1;
-    const last = head + sec.items.length;
+    const last = head + Math.max(1, sec.items.length);
     totals.push(`D${head}`);
     const sub = sec.items.reduce((t, i) => t + (i.qty != null && i.rate != null ? i.qty * i.rate : 0), 0);
     rows.push([{ v: sec.title, s: S.bold }, null, null, { f: `SUM(D${first}:D${last})`, v: sub, s: S.boldMoney }, { v: sec.note ?? '', s: S.muted }]);
@@ -257,21 +262,22 @@ function downloadBom() {
       const r = rows.length + 1;
       const qty = i.f ? { f: i.f, v: i.qty } : i.qty ?? '';
       const amount = i.qty != null && i.rate != null ? i.qty * i.rate : null;
-      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }]);
+      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }, ...(edited ? [i.desc ?? '', i.link ?? ''] : [])]);
     }
+    if (!sec.items.length) rows.push(null);
   }
-  const all = lastBom.sections.flatMap((x) => x.items);
+  const all = bom.sections.flatMap((x) => x.items);
   const grand = all.reduce((t, i) => t + (i.qty != null && i.rate != null ? i.qty * i.rate : 0), 0);
   rows.push(null);
   rows.push([{ v: 'Total', s: S.title }, null, null, { f: totals.join('+'), v: grand, s: S.boldMoney }]);
-  const blob = workbook({ sheetName: 'Parts list', rows, widths: [34, 10, 13, 14, 46], names });
+  const blob = workbook({ sheetName: 'Parts list', rows, widths: [34, 10, 13, 14, 46, ...(edited ? [40, 40] : [])], names });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${name.replace(/[\\/:*?"<>|]+/g, '-')} parts.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bom-xlsx').addEventListener('click', downloadBom);
+$('bom-xlsx').addEventListener('click', () => downloadBom());
 
 function update() {
   refreshTabStates();
@@ -342,6 +348,7 @@ function update() {
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   $('board-size').textContent = boardOn && rim.length ? `Board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
   renderBom(s, hexes, rim);
+  if (page === PLAYBOOK_PAGE) showPlaybook(s, hexes, edges);
 
   if (gridHexes.length === 0) {
     note.textContent = `Wall too small. One hexagon needs at least ${formatLength(2 * lattice.hw)} × ${formatLength(2 * lattice.hh)}.`;
@@ -606,7 +613,7 @@ const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
 const hintFor = (v) =>
-  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'wiring' ? 'labels' : wiringView] : HINTS[v];
+  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'wiring' ? 'labels' : wiringView] : page === PLAYBOOK_PAGE ? '' : HINTS[v];
 
 function setPage(next) {
   page = next;
@@ -626,6 +633,87 @@ function setPage(next) {
 }
 backBtn.addEventListener('click', () => setPage(page - 1));
 nextBtn.addEventListener('click', () => setPage(page + 1));
+
+// --- the build guide: page 4, or the only page of a shared link -------------------------------------------
+
+// A guide's edits to its parts list (changed values, descriptions, links and added rows) are kept in this browser
+// until it is shared; a share stores them with the design on the server, under a new id each time.
+const PLAYBOOK_KEY = 'hexwall-playbook:';
+const playbookRoot = $('playbook');
+let sharedId = null;
+let sharedEdits = null;
+let partView = null;
+let partViewLoading = null;
+
+const playbookKey = () => PLAYBOOK_KEY + (sharedId ? `share:${sharedId}` : `design:${active?.saveId ?? active?.name ?? ''}`);
+function loadEdits() {
+  let e = null;
+  try {
+    e = JSON.parse(localStorage.getItem(playbookKey()) ?? 'null');
+  } catch {
+    e = null;
+  }
+  e ??= sharedEdits ? structuredClone(sharedEdits) : null;
+  return { overrides: e?.overrides ?? {}, custom: Array.isArray(e?.custom) ? e.custom : [] };
+}
+function storeEdits(edits) {
+  try {
+    localStorage.setItem(playbookKey(), JSON.stringify(edits));
+  } catch {
+    // kept for this visit only
+  }
+}
+
+// the node layers' 3D view loads with three.js the first time the guide shows
+function mountParts(el) {
+  if (partView) return partView.mount(el);
+  partViewLoading ??= import('./partview.js').then(({ createPartView }) => createPartView(geometry.nodeVisuals));
+  partViewLoading
+    .then((v) => {
+      partView = v;
+      // the guide may have been redrawn while it loaded; the newest box gets it
+      const box = playbookRoot.querySelector('.pb-parts');
+      if (box) v.mount(box);
+    })
+    .catch((err) => (el.textContent = `Could not load the 3D parts (${err.message}).`));
+}
+
+async function shareGuide(edits) {
+  const res = await fetch('api/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: active?.name ?? 'Hexagon wall', snapshot: snapshot(), playbook: edits }),
+  });
+  if (!res.ok) throw new Error(res.status === 404 || res.status === 405 ? 'this server cannot store shares' : `the server said ${res.status}`);
+  const { id } = await res.json();
+  // the new link starts from what was shared, so its own edits are kept apart from this guide's
+  try {
+    localStorage.setItem(`${PLAYBOOK_KEY}share:${id}`, JSON.stringify(edits));
+  } catch {}
+  return new URL(`?s=${id}`, new URL('.', location.href)).href;
+}
+
+function showPlaybook(s, hexes, edges) {
+  const topology = buildWiring(hexes, edges, lattice, allNodes);
+  renderPlaybook(playbookRoot, {
+    name: active?.name ?? 'Hexagon wall',
+    shared: !!sharedId,
+    layout: lastLayout,
+    allNodes,
+    topology,
+    arrows: channelArrows(topology, lattice),
+    counts: s.counts,
+    bom: lastBom,
+    edits: loadEdits(),
+    onEdits: storeEdits,
+    exportExcel: (bom) => downloadBom(bom),
+    share: shareGuide,
+    mountParts,
+    rupees,
+    formatLength,
+    constants: { CHANNEL_CM, LENGTH_CM, CHANNELS_PER_LENGTH, LEDS_PER_CHANNEL, LEDS_PER_M, NODE_GRAMS },
+  });
+}
 
 // --- tabs: each one an open design, like browser tabs; saves keep them in this browser -------
 
@@ -1005,7 +1093,8 @@ document.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('beforeunload', (e) => {
-  if (tabs.some(hasChanges)) e.preventDefault();
+  // a shared guide keeps its edits in this browser by itself
+  if (!sharedId && tabs.some(hasChanges)) e.preventDefault();
 });
 
 fresh = JSON.stringify(snapshot());
@@ -1152,7 +1241,10 @@ async function startViewer() {
 }
 
 initSections();
-initTheme(() => viewer?.setTheme());
+initTheme(() => {
+  viewer?.setTheme();
+  partView?.setTheme();
+});
 
 async function start() {
   if (location.protocol === 'file:') {
@@ -1174,6 +1266,14 @@ async function start() {
         return { dx, dz, mcu: Math.hypot(dx, dz) < 0.05 };
       });
     labelHexNodes(lattice.hexNodes);
+    // which way each built-in plate stack's node-1 points, for the build guide's arrows
+    const nodePlate = geometry.nodeVisuals.find((v) => v.part === 'middle_plate');
+    const plates = geometry.hexVisuals.filter((v) => v.part === 'middle_plate');
+    if (nodePlate) {
+      plates.forEach((v, i) => (lattice.hexNodes[i].facing = plateFacing(v.rpy, nodePlate.rpy, lattice)));
+      const edgePlate = geometry.edgeVisuals.find((v) => v.part === 'middle_plate');
+      if (edgePlate) lattice.edge.plateFacing = plateFacing(edgePlate.rpy, nodePlate.rpy, lattice);
+    }
   } catch (err) {
     $('note').textContent = `Could not read the URDF files: ${err.message}`;
     return;
@@ -1183,8 +1283,29 @@ async function start() {
   thicknessIn.addEventListener('input', update);
   raiseIn.addEventListener('input', update);
   svg.classList.add('flat');
+  const share = new URLSearchParams(location.search).get('s');
+  if (share) await openShared(share);
   update();
   startViewer();
+}
+
+// a shared link opens straight on its build guide, and only that
+async function openShared(id) {
+  try {
+    const res = await fetch(`api/share/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status === 404 ? 'no guide has that link' : `the server said ${res.status}`);
+    const doc = await res.json();
+    sharedId = doc.id;
+    sharedEdits = doc.playbook ?? null;
+    active.name = doc.name || 'Shared guide';
+    app.dataset.shared = '';
+    document.title = `${active.name} · build guide`;
+    restore(doc.snapshot);
+    setPage(PLAYBOOK_PAGE);
+    renderTabs();
+  } catch (err) {
+    status(`Could not open the shared guide: ${err.message}`);
+  }
 }
 
 start();

@@ -54,7 +54,7 @@ function readPalette() {
 }
 
 // Three flat bands of light (shade, side, lit) instead of smooth shading: the cel look.
-function toonRamp() {
+export function toonRamp() {
   const texture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255, 140, 140, 140, 255, 255, 255, 255, 255]), 3, 1);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
@@ -65,7 +65,7 @@ function toonRamp() {
 
 // Ink outline by the inverted hull: back faces drawn again, pushed out along the normal by a fixed number of
 // pixels so the line stays the same weight at any zoom. Works on instanced and plain meshes alike.
-function outlineMaterial() {
+export function outlineMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { color: { value: new THREE.Color() }, width: { value: 1.5 }, resolution: { value: new THREE.Vector2(1, 1) } },
     side: THREE.BackSide,
@@ -97,7 +97,7 @@ function outlineMaterial() {
 // The hull needs one normal per corner, averaged over the faces that meet there, or it splits open at every edge
 // of a flat-shaded STL.
 const smoothCache = new WeakMap();
-function smoothed(geometry) {
+export function smoothed(geometry) {
   let g = smoothCache.get(geometry);
   if (!g) {
     const bare = new THREE.BufferGeometry();

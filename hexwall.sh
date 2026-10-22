@@ -5,6 +5,8 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE="hexwall:latest"
 CONTAINER="hexwall"
+# shared build guides are kept in this named volume, so stop, restart and update never lose them
+VOLUME="hexwall-data"
 PORT="${HEXWALL_PORT:-8080}"
 
 cd "$APP_DIR"
@@ -48,7 +50,7 @@ cmd_start() {
     return
   fi
   container_exists && docker rm "$CONTAINER" >/dev/null
-  docker run -d --name "$CONTAINER" -p "$PORT:80" --restart unless-stopped "$IMAGE" >/dev/null
+  docker run -d --name "$CONTAINER" -p "$PORT:80" -v "$VOLUME:/data" --restart unless-stopped "$IMAGE" >/dev/null
   say "Running at http://localhost:$PORT"
 }
 
@@ -90,6 +92,7 @@ cmd_status() {
   if container_running; then
     say "Running at http://localhost:$PORT"
     docker ps --filter "name=^${CONTAINER}$" --format '  {{.Status}}  {{.Ports}}'
+    say "Shared guides kept in volume $VOLUME"
   else
     say "Not running."
   fi

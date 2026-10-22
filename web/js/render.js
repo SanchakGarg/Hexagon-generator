@@ -1,7 +1,7 @@
 const rad = (d) => (d * Math.PI) / 180;
 const fmt = (v) => +v.toFixed(5);
 
-function hexPoints(cx, cy, radius, rotation) {
+export function hexPoints(cx, cy, radius, rotation) {
   const pts = [];
   for (let k = 0; k < 6; k++) {
     const a = rad(30 + 60 * k + rotation);
@@ -30,10 +30,10 @@ function sketchPoints(cx, cy, radius, seed) {
   return pts.join(' ');
 }
 
-const sketch = (cx, cy, radius, id) =>
+export const sketch = (cx, cy, radius, id) =>
   `<polygon class="sketch" points="${sketchPoints(cx, cy, radius, `${id}a`)}"/><polygon class="sketch" points="${sketchPoints(cx, cy, radius * 0.985, `${id}b`)}"/>`;
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function stripPoints(x1, y1, x2, y2, halfWidth) {
   const len = Math.hypot(x2 - x1, y2 - y1);
@@ -94,7 +94,7 @@ function wiringSvg(w, y) {
 // The LED channels view: one arrow along each channel from DIN to DOUT, in the colour of the chain that drives it.
 // A hovered chain also shows where its signal leaves the LEDs: a dotted line beside the partner channel it rides
 // back on, and a dotted ring at each switch. A pulse then runs down the chain hop by hop, like the data passing along.
-function arrowsSvg(arrows, jumps, lat, y) {
+export function arrowsSvg(arrows, jumps, lat, y) {
   const head = lat.rho * 1.1;
   const out = ['<g class="wiring chans">'];
   for (const a of arrows) {

@@ -233,11 +233,13 @@
           </div>
         </aside>
       </div>
+      <!-- page 4: the build guide, a sketchbook of sheets read top to bottom -->
+      <div class="playbook" id="playbook" data-page-only="4" aria-label="Build guide"></div>
     </main>
 
     <footer class="footer">
       <div class="footer-pages">
-        <span class="page-count" id="page-count">Page 1 of 3 · Configure</span>
+        <span class="page-count" id="page-count">Page 1 of 4 · Configure</span>
         <button type="button" class="btn" id="back-btn" hidden>Back</button>
         <button type="button" class="btn primary" id="next-btn">Next</button>
       </div>
@@ -261,6 +263,8 @@
   </dialog>
 
   <div class="tooltip" id="tooltip" hidden></div>
+  <!-- the build guide's parts list as a plain table, filled just before printing; only it prints -->
+  <div id="pb-print" aria-hidden="true"></div>
   <!-- a short note that pops up after a save -->
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="js/main.js"></script>
