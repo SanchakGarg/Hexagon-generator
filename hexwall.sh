@@ -50,7 +50,8 @@ cmd_start() {
     return
   fi
   container_exists && docker rm "$CONTAINER" >/dev/null
-  docker run -d --name "$CONTAINER" -p "$PORT:80" -v "$VOLUME:/data" --restart unless-stopped "$IMAGE" >/dev/null
+  # parts.xlsx is mounted from the repo, read-only: the server reads it as it starts, so a restart picks up edits
+  docker run -d --name "$CONTAINER" -p "$PORT:80" -v "$VOLUME:/data" -v "$APP_DIR/parts.xlsx:/app/parts.xlsx:ro" --restart unless-stopped "$IMAGE" >/dev/null
   say "Running at http://localhost:$PORT"
 }
 
@@ -111,7 +112,7 @@ Usage: ./hexwall.sh <command>
   install   build the Docker image
   start     start the site (builds the image first if needed)
   stop      stop and remove the container
-  restart   stop, then start
+  restart   stop, then start (reads parts.xlsx again)
   update    git pull (if a remote exists), rebuild, restart if it was running
   status    show whether the site is running
   logs      follow the server logs

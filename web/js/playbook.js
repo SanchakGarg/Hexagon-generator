@@ -325,7 +325,7 @@ export function mergeBom(bom, edits) {
     const sec = sections.find((s) => s.title === c.section) ?? sections.at(-1);
     sec.items.push({ key: c.id, custom: true, label: c.label ?? '', qty: c.qty ?? null, rate: c.rate ?? null, desc: c.desc ?? '', link: c.link ?? '' });
   }
-  return { sections, inputs: bom.inputs };
+  return { sections, inputs: bom.inputs, settings: bom.settings };
 }
 
 function applyEdit(item, e = {}) {

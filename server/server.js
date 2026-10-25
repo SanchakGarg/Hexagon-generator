@@ -1,15 +1,18 @@
-// Hexagon Wall Planner server: the app's static files, plus shared build guides kept as JSON files under DATA_DIR
-// (a Docker volume, so they outlive the container). Node's standard library only.
+// Hexagon Wall Planner server: the app's static files, shared build guides kept as JSON files under DATA_DIR
+// (a Docker volume, so they outlive the container), and the parts list from parts.xlsx. Node's standard library only.
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readWorkbook } from './xlsx.js';
 
 const PORT = Number(process.env.PORT ?? 80);
 const ROOT = resolve(process.env.PUBLIC_DIR ?? new URL('../public', import.meta.url).pathname);
 const SHARES = join(resolve(process.env.DATA_DIR ?? '/data'), 'shares');
 const MAX_BODY = 512 * 1024;
+const PARTS_FILE = resolve(process.env.PARTS_FILE ?? fileURLToPath(new URL('../parts.xlsx', import.meta.url)));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const TYPES = {
@@ -71,6 +74,23 @@ async function getShare(res, id) {
   }
 }
 
+// The parts list is read once, as the server starts, and kept as JSON; every page load then gets it from memory.
+// A sheet with mistakes is still served, as the list of them, so the app can say what to fix.
+async function loadParts() {
+  try {
+    const { partsFromSheets } = await import(pathToFileURL(join(ROOT, 'js', 'parts.js')).href);
+    const { parts, errors } = partsFromSheets(readWorkbook(await readFile(PARTS_FILE)));
+    if (errors.length) throw new Error(errors.join('\n'));
+    console.log(`parts list from ${PARTS_FILE}: ${parts.sections.reduce((n, s) => n + s.items.length, 0)} items, ${parts.settings.length} settings`);
+    return { code: 200, body: JSON.stringify(parts) };
+  } catch (err) {
+    const error = err.code === 'ENOENT' ? `${PARTS_FILE} is missing` : err.message;
+    console.error(`parts list from ${PARTS_FILE} has problems:\n${error}`);
+    return { code: 500, body: JSON.stringify({ error }) };
+  }
+}
+const parts = await loadParts();
+
 async function serveStatic(req, res, pathname) {
   let rel;
   try {
@@ -106,6 +126,7 @@ createServer(async (req, res) => {
       res.writeHead(301, { Location: `/${pathname.replace(/^\/web\/?/, '')}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}` });
       return res.end();
     }
+    if (pathname === '/api/parts' && req.method === 'GET') return send(res, parts.code, parts.body, 'application/json');
     if (pathname === '/api/share' && req.method === 'POST') return await createShare(req, res);
     const m = pathname.match(/^\/api\/share\/([^/]+)$/);
     if (m && req.method === 'GET') return await getShare(res, m[1]);

@@ -498,6 +498,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   min-height: 1.2em;
   font-size: 1.12rem;
   color: var(--accent);
+  white-space: pre-line;
 }
 
 .note:empty { display: none; }

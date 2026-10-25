@@ -6,6 +6,8 @@ COPY web /app/public
 COPY hexagon /app/public/hexagon
 COPY Node /app/public/Node
 COPY Edge /app/public/Edge
+# the parts list; hexwall.sh mounts the repo's copy over this one, so editing it needs only a restart
+COPY parts.xlsx /app/parts.xlsx
 
 # shared build guides live here; mount a volume so they outlive the container
 ENV DATA_DIR=/data PORT=80

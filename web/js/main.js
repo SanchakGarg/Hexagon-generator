@@ -5,6 +5,7 @@ import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, se
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 import { renderPlaybook } from './playbook.js';
+import { buildBom } from './parts.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
@@ -20,29 +21,8 @@ const PAGES = ['Configure', 'Parts list', 'Connections and wiring', 'Build guide
 const PARTS_PAGE = 2;
 const LABELS_PAGE = 3;
 const PLAYBOOK_PAGE = 4;
-// LED channels are cut 27 cm long from 2 m lengths, so each length gives 7; each channel holds 15 LEDs of a
-// 60-per-metre WS2812B strip that comes in 5 m rolls
-const CHANNEL_CM = 27;
-const LENGTH_CM = 200;
-const CHANNELS_PER_LENGTH = Math.floor(LENGTH_CM / CHANNEL_CM);
-const LEDS_PER_CHANNEL = 15;
-const LEDS_PER_M = 60;
-const ROLL_M = 5;
-// every node, central ones too, is 27 g of 3D-printing filament
-const NODE_GRAMS = 27;
-// prices in rupees, per piece unless noted
-const PRICE = {
-  channel: 50, // 2 m LED channel
-  strip: 1365, // 5 m WS2812B roll
-  filament: 1349, // 1 kg roll
-  touch: 19 / 2, // touch sensors are ₹19 a pair
-  esp: 792, // ESP32-ETH01
-  psu: 1115, // 5 V 10 A power supply
-  drywall: 1.4,
-  m3: 3.5,
-  nut: 0.95,
-  standoff: 4.4,
-};
+// the parts list, its prices and the build constants come from parts.xlsx, which the server reads as it starts
+let partsDef = null;
 const rupees = (n) => {
   const f = Number.isInteger(n) ? 0 : 2;
   return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: f, maximumFractionDigits: f })}`;
@@ -143,54 +123,18 @@ function renderBom(s, hexes, rim) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
-  const channels = s.counts.leds;
-  const nodes = s.counts.nodes;
-  const central = s.counts.mcu;
-  const stripM = (channels * LEDS_PER_CHANNEL) / LEDS_PER_M;
-  const grams = nodes * NODE_GRAMS;
-  const sections = [
-    {
-      title: 'LED channels',
-      note: `${channels} channel${channels === 1 ? '' : 's'} · ${CHANNEL_CM} cm each`,
-      items: [
-        { key: 'channel', label: `LED channels (${LENGTH_CM / 100} m)`, qty: Math.ceil(channels / CHANNELS_PER_LENGTH), rate: PRICE.channel, note: `${CHANNELS_PER_LENGTH} channels cut from each`, f: `ROUNDUP(LED_channels/${CHANNELS_PER_LENGTH},0)` },
-        { key: 'strip', label: `LED strip WS2812B (${ROLL_M} m roll)`, qty: Math.ceil(stripM / ROLL_M), rate: PRICE.strip, note: `${+stripM.toFixed(2)} m · ${LEDS_PER_CHANNEL} LEDs per channel at ${LEDS_PER_M}/m`, f: `ROUNDUP(LED_channels*${LEDS_PER_CHANNEL}/${LEDS_PER_M}/${ROLL_M},0)` },
-        { key: 'conn2510', label: '2510 4-pin connectors', qty: channels * 2, rate: null, note: '2 per LED channel', f: 'LED_channels*2' },
-      ],
-    },
-    {
-      title: 'Nodes',
-      note: `${nodes} node${nodes === 1 ? '' : 's'}`,
-      items: [
-        { key: 'filament', label: 'Filament (1 kg)', qty: Math.ceil(grams / 1000), rate: PRICE.filament, note: `${(grams / 1000).toFixed(2)} kg · ${NODE_GRAMS} g per node`, f: `ROUNDUP(Nodes*${NODE_GRAMS}/1000,0)` },
-        { key: 'pcb', label: 'Node PCBs', qty: nodes - central, rate: null, note: '1 per node, central nodes apart', f: 'Nodes-Central_nodes' },
-        { key: 'central', label: 'Central nodes', qty: central, rate: null, note: '1 per hexagon', f: 'Central_nodes' },
-        { key: 'touch', label: 'Touch sensors', qty: nodes - skipped, rate: PRICE.touch, note: skipped ? `1 per node, ${skipped} left out` : '1 per node', f: 'Nodes-Sensors_left_out' },
-      ],
-    },
-    {
-      title: 'Network and control',
-      note: '1 per hexagon',
-      items: [
-        { key: 'esp', label: 'ESP32-ETH01', qty: hexes.length, rate: PRICE.esp, f: 'Hexagons' },
-        { key: 'ethernet', label: 'Ethernet cables', qty: null, rate: null },
-        { key: 'psu', label: '5 V 10 A power supply', qty: hexes.length, rate: PRICE.psu, f: 'Hexagons' },
-      ],
-    },
-    {
-      title: 'Miscellaneous',
-      note: 'per node',
-      items: [
-        { key: 'drywall', label: 'Drywall screws', qty: nodes * 2, rate: PRICE.drywall, note: '2 per node', f: 'Nodes*2' },
-        { key: 'm3', label: 'M3 screws', qty: nodes * 3, rate: PRICE.m3, note: '3 per node', f: 'Nodes*3' },
-        { key: 'nut', label: 'M3 nuts', qty: nodes * 3, rate: PRICE.nut, note: '3 per node', f: 'Nodes*3' },
-        { key: 'standoff', label: 'M3 × 6 mm standoffs', qty: nodes * 3, rate: PRICE.standoff, note: '3 per node', f: 'Nodes*3' },
-        ...(boardOn && rim.length ? [{ key: 'board', label: 'Backboard', qty: 1, rate: null, note: `${formatLength(span('x'))} × ${formatLength(span('z'))}` }] : []),
-      ],
-    },
-  ];
+  const bom = buildBom(partsDef, {
+    Hexagons: hexes.length,
+    Nodes: s.counts.nodes,
+    Central_nodes: s.counts.mcu,
+    LED_channels: s.counts.leds,
+    Sensors_left_out: skipped,
+    Backboard: boardOn && rim.length ? 1 : 0,
+    Backboard_size: rim.length ? `${formatLength(span('x'))} × ${formatLength(span('z'))}` : '',
+  });
+  const { sections } = bom;
   $('bom-for').textContent = `for ${hexes.length} hexagon${hexes.length === 1 ? '' : 's'}`;
-  lastBom = { sections, inputs: { Hexagons: hexes.length, Nodes: nodes, Central_nodes: central, LED_channels: channels, Sensors_left_out: skipped } };
+  lastBom = bom;
 
   const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
   const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
@@ -246,6 +190,13 @@ function downloadBom(bom = lastBom) {
   for (const [k, v] of Object.entries(bom.inputs)) {
     names.push([k, `$B$${rows.length + 1}`]);
     rows.push([k.replace(/_/g, ' '), { v, s: S.input }]);
+  }
+  // the settings from parts.xlsx, which the quantity formulas use too
+  rows.push(null);
+  rows.push([{ v: 'Settings', s: S.head }, { v: '', s: S.head }]);
+  for (const st of bom.settings) {
+    names.push([st.name, `$B$${rows.length + 1}`]);
+    rows.push([st.name.replace(/_/g, ' '), st.f ? { f: st.f, v: st.value } : { v: st.value, s: S.input }, null, null, { v: st.note ?? '', s: S.muted }]);
   }
   rows.push(null);
   rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note', ...(edited ? ['Description', 'Link / contact'] : [])].map((v) => ({ v, s: S.head })));
@@ -713,7 +664,7 @@ function showPlaybook(s, hexes, edges) {
     snapshot: viewer ? (box, width, opts) => viewer.snapshot(box, width, opts) : null,
     rupees,
     formatLength,
-    constants: { CHANNEL_CM, LENGTH_CM, CHANNELS_PER_LENGTH, LEDS_PER_CHANNEL, LEDS_PER_M, NODE_GRAMS },
+    constants: lastBom.constants,
   });
 }
 
@@ -1250,13 +1201,22 @@ initTheme(() => {
   if (page === PLAYBOOK_PAGE && lattice) update();
 });
 
+// the parts list the server read from parts.xlsx; if the sheet has mistakes, the server names each cell
+async function loadParts(root) {
+  const res = await fetch(`${root}/api/parts`, { cache: 'no-store' });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(`parts.xlsx needs fixing, then ./hexwall.sh restart:\n${body.error ?? `the server said ${res.status}`}`), { parts: true });
+  return body;
+}
+
 async function start() {
   if (location.protocol === 'file:') {
     $('note').textContent = 'Open this through the server: run ./hexwall.sh start, then visit http://localhost:8080';
     return;
   }
   try {
-    geometry = await loadGeometry(new URL('..', location.href).href.replace(/\/$/, ''));
+    const root = new URL('..', location.href).href.replace(/\/$/, '');
+    [geometry, partsDef] = await Promise.all([loadGeometry(root), loadParts(root)]);
     lattice = deriveLattice(geometry.hexFrames, geometry.nodeFrames, geometry.nodeBodyRadius);
     lattice.edge = deriveEdge(geometry.edgeFrames, geometry.edgeVisuals, lattice);
     lattice.perHex = partsOf(geometry.hexVisuals);
@@ -1279,7 +1239,7 @@ async function start() {
       if (edgePlate) lattice.edge.plateFacing = plateFacing(edgePlate.rpy, nodePlate.rpy, lattice);
     }
   } catch (err) {
-    $('note').textContent = `Could not read the URDF files: ${err.message}`;
+    $('note').textContent = err.parts ? err.message : `Could not read the URDF files: ${err.message}`;
     return;
   }
   widthIn.addEventListener('input', update);
