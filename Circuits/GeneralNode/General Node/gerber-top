@@ -1,0 +1,12 @@
+### Footprint positions - created on 2026-10-25T23:17:43+0530 ###
+### Printed by KiCad version 9.0.7
+## Unit = mm, Angle = deg.
+## Side : top
+# Ref     Val          Package                     PosX       PosY       Rot  Side
+R1        10K          R_0805_2012Metric       152.3625   -76.1500    0.0000  top
+R2        10K          R_0805_2012Metric       152.4375   -78.3000    0.0000  top
+R3        10K          R_0805_2012Metric       152.4875   -80.3250    0.0000  top
+R4        10K          R_0603_1608Metric       150.1500   -93.7750    0.0000  top
+R5        10K          R_0603_1608Metric       150.1500   -95.2750    0.0000  top
+U1        PCF8574RGTR  QFN50P300X300X100-17N   158.9400   -79.3000    0.0000  top
+## End
