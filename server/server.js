@@ -81,7 +81,7 @@ async function loadParts() {
     const { partsFromSheets } = await import(pathToFileURL(join(ROOT, 'js', 'parts.js')).href);
     const { parts, errors } = partsFromSheets(readWorkbook(await readFile(PARTS_FILE)));
     if (errors.length) throw new Error(errors.join('\n'));
-    console.log(`parts list from ${PARTS_FILE}: ${parts.sections.reduce((n, s) => n + s.items.length, 0)} items, ${parts.settings.length} settings`);
+    console.log(`parts list from ${PARTS_FILE}: ${parts.items.length} items, ${parts.settings.length} settings`);
     return { code: 200, body: JSON.stringify(parts) };
   } catch (err) {
     const error = err.code === 'ENOENT' ? `${PARTS_FILE} is missing` : err.message;

@@ -1,13 +1,26 @@
 // The parts list as parts.xlsx describes it. The server reads the workbook once at startup and hands the browser its
-// cells as plain JSON; this module turns them into the list for a wall. The server also uses it to check every
-// formula in the sheet before it serves it, so a typo shows up straight away rather than on some later wall.
+// cells as plain JSON; this module turns them into the list for a wall. The server also uses it to check the sheet
+// before it serves it, so a typo shows up straight away rather than on some later wall.
 //
-// Formulas are a small Excel-like language: numbers, names, + - * / and brackets, and ROUNDUP, ROUNDDOWN, ROUND,
-// MIN and MAX. Names are the wall's counts (WALL_INPUTS) and the Settings sheet's rows, any case. Text cells may
-// carry {formula} placeholders, filled in with the worked-out number.
+// The Parts sheet has one row per item: Item, Section, Price, Qty, Per, Vendor, Description. Qty is counted Per
+// something on the wall (PER), and the total is rounded up: 3 per node, or 1 per 7 LED channels. With no Per, Qty
+// is for the whole wall. An item that comes to 0 (the backboard, when it is off) is left off the list.
+//
+// The Settings sheet holds the build guide's numbers. A value there may be a small Excel-like formula on the rows
+// above it: + - * / and brackets, and ROUNDUP, ROUNDDOWN, ROUND, MIN and MAX.
 
-// the wall's counts, as the app works them out; Backboard is 1 when the backboard is on, Backboard_size its size
-export const WALL_INPUTS = ['Hexagons', 'Nodes', 'Central_nodes', 'LED_channels', 'Sensors_left_out', 'Backboard', 'Backboard_size'];
+// what a Qty can be counted per, from the wall's counts; plurals and any case are fine
+const PER = {
+  wall: { of: () => 1, f: '1' },
+  hexagon: { of: (w) => w.Hexagons, f: 'Hexagons' },
+  node: { of: (w) => w.Nodes, f: 'Nodes' },
+  'central node': { of: (w) => w.Central_nodes, f: 'Central_nodes' },
+  'other node': { of: (w) => w.Nodes - w.Central_nodes, f: '(Nodes-Central_nodes)' },
+  'touch sensor': { of: (w) => w.Nodes - w.Sensors_left_out, f: '(Nodes-Sensors_left_out)' },
+  'led channel': { of: (w) => w.LED_channels, f: 'LED_channels' },
+  backboard: { of: (w) => w.Backboard, f: 'Backboard' },
+};
+export const PER_NAMES = Object.keys(PER);
 // settings the rest of the app reads (the build guide's steps and channel drawing); the sheet must keep these
 export const REQUIRED_SETTINGS = ['Channel_cm', 'Length_cm', 'Channels_per_length', 'LEDs_per_channel', 'LEDs_per_m', 'Node_grams'];
 
@@ -94,55 +107,76 @@ export function compile(src) {
 }
 
 const scopeOf = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k.toLowerCase(), v]));
-// a whole number as is, anything else to two places at most
-const show = (v) => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : String(+v.toFixed(2))) : String(v ?? ''));
-const fill = (text, s) => String(text ?? '').replace(/\{([^{}]+)\}/g, (_, f) => show(compile(f)(s)));
-const slug = (t) => String(t).toLowerCase().replace(/\{[^}]*\}/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-// a cell as read from the sheet: { v } with a number or text, and { f } when the cell holds an Excel formula
+const slug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const isBlank = (c) => c == null || (c.f == null && (c.v == null || String(c.v).trim() === ''));
-// a number cell is that number; text or an Excel formula is one of our formulas
-const valueOf = (c, s) => (isBlank(c) ? null : c.f == null && typeof c.v === 'number' ? c.v : compile(c.f ?? c.v)(s));
-const formulaOf = (c) => (isBlank(c) || (c.f == null && typeof c.v === 'number') ? null : String(c.f ?? c.v).trim().replace(/^=/, ''));
+const text = (c) => (isBlank(c) ? '' : String(c.v ?? '').trim());
+// a number cell, or text that reads as one (₹ signs and commas allowed); null when blank, NaN when not a number
+const numberOf = (c) => (isBlank(c) ? null : typeof c.v === 'number' ? c.v : Number(String(c.v).replace(/[₹,\s]/g, '')));
+
+// "7 LED channels" → { n: 7, unit: PER['led channel'] }; blank is per wall; undefined when not understood
+function parsePer(raw) {
+  const m = String(raw ?? '').trim().toLowerCase().replace(/\s+/g, ' ').match(/^(?:(\d+(?:\.\d+)?)\s*)?(.*)$/);
+  const name = m[2] || 'wall';
+  const key = PER[name] ? name : name.replace(/s$/, '');
+  return PER[key] && !(m[1] && +m[1] <= 0) && { n: m[1] ? +m[1] : 1, unit: PER[key], name: key };
+}
 
 // Settings, worked out in order, so a row can use the rows above it.
 export function settingsOf(parts) {
   const values = {};
   const rows = parts.settings.map((r) => {
-    const value = valueOf(r.value, scopeOf(values));
+    const c = r.value;
+    const value = isBlank(c) ? null : c.f == null && typeof c.v === 'number' ? c.v : compile(c.f ?? c.v)(scopeOf(values));
     values[r.name] = value;
-    return { name: r.name, value, f: formulaOf(r.value), note: r.note };
+    return { name: r.name, value, note: r.note };
   });
   // the constants the build guide uses, by their old names in capitals
   const constants = Object.fromEntries(Object.entries(values).map(([k, v]) => [k.toUpperCase(), v]));
   return { rows, values, constants };
 }
 
-// The parts list for one wall: sections of items { key, label, qty, rate, note, f }, as the page and the Excel
-// download expect them. inputs holds the wall's counts (WALL_INPUTS).
-export function buildBom(parts, inputs) {
+const plural = (n, word) => (n === 1 ? word : `${word}s`);
+// the working shown under an item: "3 per node", "1 per 7 LED channels"
+function noteOf(it, wall) {
+  if (it.qty == null) return '';
+  if (it.per.name === 'backboard') return wall.Backboard_size ?? '';
+  if (it.per.name === 'wall') return '';
+  const label = it.per.name.replace('led', 'LED');
+  return `${it.qty} per ${it.per.n === 1 ? label : `${it.per.n} ${plural(it.per.n, label)}`}`;
+}
+
+// The parts list for one wall: sections of items { key, label, qty, rate, note, desc, link, f }, as the page and the
+// Excel download expect them. wall holds the wall's counts: Hexagons, Nodes, Central_nodes, LED_channels,
+// Sensors_left_out, Backboard (1 when on) and Backboard_size (text).
+export function buildBom(parts, wall) {
   const settings = settingsOf(parts);
-  const s = scopeOf({ ...settings.values, ...inputs });
-  const sections = parts.sections.map((sec) => ({
-    title: fill(sec.title, s),
-    note: fill(sec.note, s),
-    items: sec.items
-      .filter((it) => isBlank(it.onlyIf) || valueOf(it.onlyIf, s))
-      .map((it) => ({
-        key: it.key || slug(it.label),
-        label: fill(it.label, s),
-        qty: valueOf(it.qty, s),
-        rate: valueOf(it.price, s),
-        note: fill(it.note, s) || undefined,
-        f: formulaOf(it.qty) ?? undefined,
-      })),
-  }));
-  const numeric = Object.fromEntries(Object.entries(inputs).filter(([, v]) => typeof v === 'number'));
-  return { sections, inputs: numeric, settings: settings.rows, constants: settings.constants };
+  const sections = [];
+  for (const raw of parts.items) {
+    const per = parsePer(raw.per);
+    const it = { ...raw, per };
+    const qty = it.qty == null ? null : Math.ceil((it.qty * per.unit.of(wall)) / per.n - 1e-9);
+    if (qty === 0) continue;
+    let sec = sections.find((x) => x.title === it.section);
+    if (!sec) sections.push((sec = { title: it.section, note: '', items: [] }));
+    const whole = Number.isInteger(it.qty / per.n);
+    sec.items.push({
+      key: slug(it.label),
+      label: it.label,
+      qty,
+      rate: it.price,
+      note: noteOf(it, wall) || undefined,
+      desc: it.desc,
+      link: it.vendor,
+      // the same sum as an Excel formula on the wall's counts, for the download
+      f: it.qty == null || per.name === 'wall' ? undefined : whole ? `${it.qty / per.n === 1 ? '' : `${it.qty / per.n}*`}${per.unit.f}` : `ROUNDUP(${it.qty === 1 ? '' : `${it.qty}*`}${per.unit.f}/${per.n},0)`,
+    });
+  }
+  const inputs = Object.fromEntries(Object.entries(wall).filter(([, v]) => typeof v === 'number'));
+  return { sections, inputs, settings: settings.rows, constants: settings.constants };
 }
 
 // Reads the workbook's cells (sheet name → rows of cells, header row first) into the parts list. Returns the parts
-// and every problem found, each naming its cell, after trying every formula against a sample wall.
+// and every problem found, each naming its cell.
 export function partsFromSheets(sheets) {
   const errors = [];
   const sheet = (name) => {
@@ -150,21 +184,20 @@ export function partsFromSheets(sheets) {
     if (!found) errors.push(`no sheet named ${name}`);
     return found ? sheets[found] : [];
   };
-  const text = (c) => (isBlank(c) ? '' : String(c.v ?? '').trim());
   // the header row names the columns, so they can be moved about
-  const columns = (rows, sheetName, wanted) => {
+  const columns = (rows, sheetName, wanted, optional = []) => {
     const head = (rows[0] ?? []).map((c) => text(c).toLowerCase());
     const at = {};
     for (const [k, label] of Object.entries(wanted)) {
       at[k] = head.findIndex((h) => h === label || h.startsWith(`${label} `) || h.startsWith(`${label}(`));
-      if (at[k] < 0 && k !== 'onlyIf' && k !== 'key' && k !== 'note') errors.push(`${sheetName}: no "${label}" column in row 1`);
+      if (at[k] < 0 && !optional.includes(k)) errors.push(`${sheetName}: no "${label}" column in row 1`);
     }
     return at;
   };
-  const ref = (sheetName, row, col) => `${sheetName}!${String.fromCharCode(65 + col)}${row + 1}`;
+  const ref = (sheetName, row, col) => `${sheetName}!${String.fromCharCode(65 + Math.max(0, col))}${row + 1}`;
 
   const setRows = sheet('Settings');
-  const sc = columns(setRows, 'Settings', { name: 'name', value: 'value', note: 'note' });
+  const sc = columns(setRows, 'Settings', { name: 'name', value: 'value', note: 'note' }, ['note']);
   const settings = [];
   setRows.slice(1).forEach((row, i) => {
     const name = text(row[sc.name]);
@@ -173,57 +206,42 @@ export function partsFromSheets(sheets) {
     settings.push({ name, value: row[sc.value] ?? null, note: text(row[sc.note]), at: i + 1 });
   });
   for (const n of REQUIRED_SETTINGS) if (!settings.some((r) => r.name.toLowerCase() === n.toLowerCase())) errors.push(`Settings: the app needs a row named ${n}`);
-
-  const partRows = sheet('Parts');
-  const pc = columns(partRows, 'Parts', { section: 'section', label: 'item', qty: 'qty', price: 'price', note: 'note', onlyIf: 'only if', key: 'key' });
-  const sections = [];
-  partRows.slice(1).forEach((row, i) => {
-    const r = i + 1;
-    const section = text(row[pc.section]);
-    const label = text(row[pc.label]);
-    if (section) sections.push({ title: section, note: text(row[pc.note]), items: [], at: r });
-    if (!label) return;
-    if (!sections.length) return errors.push(`${ref('Parts', r, pc.label)}: item "${label}" comes before any section`);
-    const cell = (k) => (pc[k] >= 0 ? row[pc[k]] ?? null : null);
-    sections[sections.length - 1].items.push({ label, qty: cell('qty'), price: cell('price'), note: text(cell('note')), onlyIf: cell('onlyIf'), key: text(cell('key')), at: r });
-  });
-
-  // try everything against a sample wall, cell by cell, so each problem names where it is
-  const sample = { Hexagons: 2, Nodes: 30, Central_nodes: 2, LED_channels: 60, Sensors_left_out: 1, Backboard: 1, Backboard_size: '2 m × 1 m' };
   const values = {};
   for (const r of settings) {
     try {
-      values[r.name] = valueOf(r.value, scopeOf(values));
+      const c = r.value;
+      values[r.name] = isBlank(c) ? null : c.f == null && typeof c.v === 'number' ? c.v : compile(c.f ?? c.v)(scopeOf(values));
       if (typeof values[r.name] !== 'number' || !Number.isFinite(values[r.name])) errors.push(`${ref('Settings', r.at, sc.value)}: ${r.name} needs a number`);
     } catch (err) {
       errors.push(`${ref('Settings', r.at, sc.value)}: ${err.message}`);
     }
   }
-  const s = scopeOf({ ...values, ...sample });
-  const check = (sheetName, r, col, fn) => {
-    try {
-      fn();
-    } catch (err) {
-      errors.push(`${ref(sheetName, r, col)}: ${err.message}`);
-    }
-  };
-  for (const sec of sections) {
-    check('Parts', sec.at, pc.section, () => fill(sec.title, s));
-    check('Parts', sec.at, pc.note, () => fill(sec.note, s));
-    for (const it of sec.items) {
-      check('Parts', it.at, pc.label, () => fill(it.label, s));
-      check('Parts', it.at, pc.qty, () => valueOf(it.qty, s));
-      check('Parts', it.at, pc.price, () => valueOf(it.price, s));
-      check('Parts', it.at, pc.note, () => fill(it.note, s));
-      check('Parts', it.at, pc.onlyIf, () => valueOf(it.onlyIf, s));
-    }
-  }
-  const keys = new Map();
-  for (const it of sections.flatMap((x) => x.items)) {
-    const k = it.key || slug(it.label);
-    if (keys.has(k)) errors.push(`${ref('Parts', it.at, pc.key >= 0 ? pc.key : pc.label)}: key "${k}" is used twice (rows ${keys.get(k) + 1} and ${it.at + 1}); give one a different Key`);
-    keys.set(k, it.at);
-  }
-  const strip = ({ at, ...rest }) => rest;
-  return { parts: { settings: settings.map(strip), sections: sections.map(({ at, items, ...sec }) => ({ ...sec, items: items.map(strip) })) }, errors };
+
+  const partRows = sheet('Parts');
+  const pc = columns(
+    partRows,
+    'Parts',
+    { label: 'item', section: 'section', price: 'price', qty: 'qty', per: 'per', vendor: 'vendor', desc: 'description' },
+    ['per', 'vendor', 'desc'],
+  );
+  const items = [];
+  const seen = new Map();
+  partRows.slice(1).forEach((row, i) => {
+    const r = i + 1;
+    const cell = (k) => (pc[k] >= 0 ? row[pc[k]] ?? null : null);
+    const label = text(cell('label'));
+    if (!label) return;
+    const price = numberOf(cell('price'));
+    const qty = numberOf(cell('qty'));
+    if (Number.isNaN(price)) errors.push(`${ref('Parts', r, pc.price)}: the price of ${label} should be a number, or blank if not known yet`);
+    if (Number.isNaN(qty) || qty < 0) errors.push(`${ref('Parts', r, pc.qty)}: the Qty of ${label} should be a number, or blank if not known yet`);
+    const per = text(cell('per'));
+    if (!parsePer(per)) errors.push(`${ref('Parts', r, pc.per)}: Per "${per}" for ${label} is not one of: ${PER_NAMES.join(', ')} (with a number in front if you like, e.g. 7 LED channels)`);
+    const key = slug(label);
+    if (seen.has(key)) errors.push(`${ref('Parts', r, pc.label)}: ${label} is listed twice (rows ${seen.get(key) + 1} and ${r + 1})`);
+    seen.set(key, r);
+    items.push({ label, section: text(cell('section')) || 'Other', price, qty, per, vendor: text(cell('vendor')), desc: text(cell('desc')) });
+  });
+  if (!items.length) errors.push('Parts: no items (one per row under the header row, with a name in the Item column)');
+  return { parts: { settings: settings.map(({ at, ...rest }) => rest), items }, errors };
 }

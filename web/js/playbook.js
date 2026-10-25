@@ -325,7 +325,7 @@ export function mergeBom(bom, edits) {
     const sec = sections.find((s) => s.title === c.section) ?? sections.at(-1);
     sec.items.push({ key: c.id, custom: true, label: c.label ?? '', qty: c.qty ?? null, rate: c.rate ?? null, desc: c.desc ?? '', link: c.link ?? '' });
   }
-  return { sections, inputs: bom.inputs, settings: bom.settings };
+  return { sections, inputs: bom.inputs };
 }
 
 function applyEdit(item, e = {}) {
@@ -378,7 +378,7 @@ function bomSheet(ctx, num_) {
   function draw() {
     merged = mergeBom(ctx.bom, edits);
     rows = [];
-    const head = h('div', { class: 'pb-row cols', role: 'row' }, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Link / contact', ''].map((t) => h('span', { role: 'columnheader' }, t)));
+    const head = h('div', { class: 'pb-row cols', role: 'row' }, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor', ''].map((t) => h('span', { role: 'columnheader' }, t)));
     const out = [head];
     merged.sections.forEach((sec, si) => {
       const subEl = h('b', { class: 'amount' });
@@ -408,12 +408,12 @@ function bomSheet(ctx, num_) {
             const o = (edits.overrides[item.key] ??= {});
             // back to what was worked out: no longer an edit
             if ((k === 'qty' || k === 'rate') && v === (item.base?.[k] ?? null)) delete o[k];
-            else if ((k === 'desc' || k === 'link') && v === '') delete o[k];
+            else if ((k === 'desc' || k === 'link') && v === (item.base?.[k] ?? '')) delete o[k];
             else o[k] = v;
             if (!Object.keys(o).length) delete edits.overrides[item.key];
           }
         };
-        const link = field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Link or contact for ${item.label || 'item'}` }, (v) => set('link', v.trim()));
+        const link = field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Vendor for ${item.label || 'item'}` }, (v) => set('link', v.trim()));
         let rowEl = null;
         rows.push(() => {
           if (!rowEl || item.custom) return;

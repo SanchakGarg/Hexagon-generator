@@ -178,7 +178,6 @@ function renderBom(s, hexes, rim) {
 // with descriptions, links and added rows; a quantity typed over there is written as typed.
 function downloadBom(bom = lastBom) {
   if (!bom) return;
-  const edited = bom !== lastBom;
   const S = STYLES;
   const rows = [];
   const names = [];
@@ -191,15 +190,8 @@ function downloadBom(bom = lastBom) {
     names.push([k, `$B$${rows.length + 1}`]);
     rows.push([k.replace(/_/g, ' '), { v, s: S.input }]);
   }
-  // the settings from parts.xlsx, which the quantity formulas use too
   rows.push(null);
-  rows.push([{ v: 'Settings', s: S.head }, { v: '', s: S.head }]);
-  for (const st of bom.settings) {
-    names.push([st.name, `$B$${rows.length + 1}`]);
-    rows.push([st.name.replace(/_/g, ' '), st.f ? { f: st.f, v: st.value } : { v: st.value, s: S.input }, null, null, { v: st.note ?? '', s: S.muted }]);
-  }
-  rows.push(null);
-  rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note', ...(edited ? ['Description', 'Link / contact'] : [])].map((v) => ({ v, s: S.head })));
+  rows.push(['Item', 'Qty', 'Price each', 'Amount', 'Note', 'Description', 'Vendor'].map((v) => ({ v, s: S.head })));
   const totals = [];
   for (const sec of bom.sections) {
     // an empty section still gets its heading row, so rows can be inserted under it
@@ -213,7 +205,7 @@ function downloadBom(bom = lastBom) {
       const r = rows.length + 1;
       const qty = i.f ? { f: i.f, v: i.qty } : i.qty ?? '';
       const amount = i.qty != null && i.rate != null ? i.qty * i.rate : null;
-      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }, ...(edited ? [i.desc ?? '', i.link ?? ''] : [])]);
+      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }, i.desc ?? '', i.link ?? '']);
     }
     if (!sec.items.length) rows.push(null);
   }
@@ -221,7 +213,7 @@ function downloadBom(bom = lastBom) {
   const grand = all.reduce((t, i) => t + (i.qty != null && i.rate != null ? i.qty * i.rate : 0), 0);
   rows.push(null);
   rows.push([{ v: 'Total', s: S.title }, null, null, { f: totals.join('+'), v: grand, s: S.boldMoney }]);
-  const blob = workbook({ sheetName: 'Parts list', rows, widths: [34, 10, 13, 14, 46, ...(edited ? [40, 40] : [])], names });
+  const blob = workbook({ sheetName: 'Parts list', rows, widths: [34, 10, 13, 14, 30, 40, 40], names });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${name.replace(/[\\/:*?"<>|]+/g, '-')} parts.xlsx`;
