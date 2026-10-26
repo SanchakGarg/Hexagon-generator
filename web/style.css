@@ -1681,7 +1681,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .pb-row input.edited { background: color-mix(in srgb, var(--butter) 55%, transparent); }
 .pb-row input.label { font-size: 1.12rem; }
 .pb-row .linkcell { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.pb-row .go { color: var(--accent); text-decoration: none; font-size: 1.1rem; }
+.pb-row .shop { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: 1.1rem; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.pb-row .shop:hover { text-decoration-thickness: 2px; }
 .pb-row .mini { border: 0; background: none; color: var(--muted); font: 1.2rem var(--hand); cursor: pointer; padding: 0; }
 .pb-row .mini:hover { color: var(--accent); }
 .pb-row.adder { border-bottom: 0; padding-left: 14px; }

@@ -1,7 +1,7 @@
 // A small .xlsx writer for the parts list: one sheet of text, numbers and formulas, packed into an uncompressed zip.
 // Cells are { v, f, s }: a value, an optional formula (without the =) and a style from STYLES.
 
-export const STYLES = { plain: 0, bold: 1, title: 2, money: 3, boldMoney: 4, head: 5, muted: 6, input: 7 };
+export const STYLES = { plain: 0, bold: 1, title: 2, money: 3, boldMoney: 4, head: 5, muted: 6, input: 7, link: 8 };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const col = (i) => String.fromCharCode(65 + i);
@@ -17,6 +17,7 @@ function sheetXml(rows, widths) {
         const ref = `${col(i)}${r + 1}`;
         const s = cell.s ? ` s="${cell.s}"` : '';
         // a formula keeps its number as a cached value, so the sheet reads right before it recalculates
+        if (cell.f && typeof cell.v === 'string') return `<c r="${ref}"${s} t="str"><f>${esc(cell.f)}</f><v>${esc(cell.v)}</v></c>`;
         if (cell.f) return `<c r="${ref}"${s}><f>${esc(cell.f)}</f>${typeof cell.v === 'number' ? `<v>${cell.v}</v>` : ''}</c>`;
         if (typeof cell.v === 'number') return `<c r="${ref}"${s}><v>${cell.v}</v></c>`;
         if (cell.v == null || cell.v === '') return s ? `<c r="${ref}"${s}/>` : '';
@@ -33,11 +34,11 @@ function sheetXml(rows, widths) {
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;₹&quot;#,##0.00"/></numFmts>
-<fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="15"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF7A7690"/><name val="Calibri"/></font></fonts>
+<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="15"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF7A7690"/><name val="Calibri"/></font><font><u/><sz val="11"/><color rgb="FF1C5FBF"/><name val="Calibri"/></font></fonts>
 <fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8E2F5"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF4CC"/></patternFill></fill></fills>
 <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="8">
+<cellXfs count="9">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
@@ -46,6 +47,7 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;

@@ -245,3 +245,27 @@ export function partsFromSheets(sheets) {
   if (!items.length) errors.push('Parts: no items (one per row under the header row, with a name in the Item column)');
   return { parts: { settings: settings.map(({ at, ...rest }) => rest), items }, errors };
 }
+
+// A vendor cell may hold a shop's link; it is shown as the shop's name, taken from the link's site: robu.in → Robu,
+// www.amazon.in/... → Amazon. Well-known shops keep their own spelling.
+const SHOP_NAMES = {
+  amazon: 'Amazon', amzn: 'Amazon', aliexpress: 'AliExpress', alibaba: 'Alibaba', flipkart: 'Flipkart', indiamart: 'IndiaMART',
+  robu: 'Robu', robocraze: 'Robocraze', evelta: 'Evelta', thingbits: 'ThingBits', electronicscomp: 'ElectronicsComp',
+  lcsc: 'LCSC', jlcpcb: 'JLCPCB', pcbway: 'PCBWay', digikey: 'DigiKey', mouser: 'Mouser', element14: 'element14',
+  sparkfun: 'SparkFun', adafruit: 'Adafruit', meesho: 'Meesho', ebay: 'eBay', quartzcomponents: 'Quartz Components',
+};
+export const isUrl = (s) => /^https?:\/\/\S+$/i.test(String(s ?? '').trim());
+export function vendorName(link) {
+  if (!isUrl(link)) return String(link ?? '').trim();
+  let host;
+  try {
+    host = new URL(String(link).trim()).hostname.toLowerCase();
+  } catch {
+    return String(link).trim();
+  }
+  const parts = host.replace(/^www\d*\./, '').split('.');
+  // the name is the label before the public suffix, which may be two labels long (co.in, com.au)
+  const two = parts.length > 2 && /^(co|com|net|org|gov|ac|edu)$/.test(parts.at(-2));
+  const name = parts.at(two ? -3 : -2) ?? parts[0];
+  return SHOP_NAMES[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
+}

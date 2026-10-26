@@ -5,7 +5,7 @@ import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, se
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 import { renderPlaybook, showGuidePage, GUIDE_PAGES } from './playbook.js';
-import { buildBom } from './parts.js';
+import { buildBom, isUrl, vendorName } from './parts.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
@@ -175,6 +175,9 @@ function renderBom(s, hexes, rim) {
 // quantity is a formula on them, and amounts, section subtotals and the total are formulas too, so changing a count
 // or a price, or adding a row inside a section, keeps the sums right. The build guide passes its own edited list,
 // with descriptions, links and added rows; a quantity typed over there is written as typed.
+// a vendor's link is written as the shop's name, linked to it
+const vendorCell = (link) => (isUrl(link) ? { f: `HYPERLINK("${link.trim().replace(/"/g, '""')}","${vendorName(link).replace(/"/g, '""')}")`, v: vendorName(link), s: STYLES.link } : link ?? '');
+
 function downloadBom(bom = lastBom) {
   if (!bom) return;
   const S = STYLES;
@@ -204,7 +207,7 @@ function downloadBom(bom = lastBom) {
       const r = rows.length + 1;
       const qty = i.f ? { f: i.f, v: i.qty } : i.qty ?? '';
       const amount = i.qty != null && i.rate != null ? i.qty * i.rate : null;
-      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }, i.desc ?? '', i.link ?? '']);
+      rows.push([i.label, qty, i.rate == null ? { v: '', s: S.money } : { v: i.rate, s: S.money }, { f: `IF(OR(B${r}="",C${r}=""),"",B${r}*C${r})`, v: amount, s: S.money }, { v: i.note ?? '', s: S.muted }, i.desc ?? '', vendorCell(i.link)]);
     }
     if (!sec.items.length) rows.push(null);
   }
@@ -541,6 +544,7 @@ for (const key of [$('touch-key')]) {
 const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
+const editBtn = $('edit-btn');
 const hintFor = (v) => (page === SENSOR_PAGE ? HINTS.sensors : page === PARTS_PAGE ? HINTS.parts : page === PLAYBOOK_PAGE ? '' : HINTS[v]);
 
 // the guide's own page, by id; Back and Next step through it, and Back from its first page returns to the parts list
@@ -555,8 +559,12 @@ function renderFooter() {
     backBtn.hidden = i === 0 && !!sharedId;
     nextBtn.hidden = i === GUIDE_PAGES.length - 1;
     nextBtn.textContent = 'Next';
+    // back to the configurator from any page of the guide; on the last it stands where Next was
+    editBtn.hidden = !!sharedId;
+    editBtn.classList.toggle('primary', nextBtn.hidden);
     return;
   }
+  editBtn.hidden = true;
   $('page-count').textContent = `Page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
   backBtn.hidden = page === 1;
   nextBtn.hidden = false;
@@ -626,6 +634,7 @@ tocList.replaceChildren(
   }),
 );
 $('edit-design').addEventListener('click', () => setPage(1));
+editBtn.addEventListener('click', () => setPage(1));
 
 // --- the assembly guide: page 4, or the only page of a shared link ----------------------------------------
 

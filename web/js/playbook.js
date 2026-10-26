@@ -4,6 +4,7 @@
 // and how the strips and touch sensors are wired. The editable parts list closes it.
 import { hexPoints, sketch, esc, arrowsSvg, wiringSvg, sensorsSvg, groupClass } from './render.js';
 import { chainPath, DIP_CONTACTS } from './wiring.js';
+import { isUrl, vendorName } from './parts.js';
 
 export const GUIDE_PAGES = [
   { id: 'intro', title: 'Introduction' },
@@ -581,7 +582,6 @@ function applyEdit(item, e = {}) {
 const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
 const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
 const num = (v) => (v === '' || v == null || !Number.isFinite(+v) ? null : +v);
-const isUrl = (s) => /^https?:\/\/\S+$/i.test(s.trim());
 
 function bomSheet(ctx) {
   const { edits, rupees } = ctx;
@@ -650,6 +650,25 @@ function bomSheet(ctx) {
           }
         };
         const link = field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Vendor for ${item.label || 'item'}` }, (v) => set('link', v.trim()));
+        // a link reads as the shop's name, linked; the pencil opens the link itself to change it
+        const shop = h('a', { class: 'shop', target: '_blank', rel: 'noopener' });
+        const pencil = h('button', { type: 'button', class: 'mini', title: 'Change the link', 'aria-label': `Change the vendor link for ${item.label || 'item'}` }, '✎');
+        const showShop = () => {
+          const v = link.value.trim();
+          const on = isUrl(v) && document.activeElement !== link;
+          shop.href = on ? v : '#';
+          shop.textContent = on ? vendorName(v) : '';
+          shop.title = on ? v : '';
+          shop.hidden = pencil.hidden = !on;
+          link.hidden = on;
+        };
+        pencil.addEventListener('click', () => {
+          shop.hidden = pencil.hidden = true;
+          link.hidden = false;
+          link.focus();
+        });
+        link.addEventListener('blur', showShop);
+        showShop();
         let rowEl = null;
         rows.push(() => {
           if (!rowEl || item.custom) return;
@@ -657,7 +676,6 @@ function bomSheet(ctx) {
           for (const k of ['desc', 'qty', 'rate', 'link']) rowEl.querySelector(`input.${k}`)?.classList.toggle('edited', k in o);
           tools.hidden = !Object.keys(o).length;
         });
-        const open = isUrl(item.link ?? '') ? h('a', { class: 'go', href: item.link.trim(), target: '_blank', rel: 'noopener', title: 'Open link' }, '↗') : null;
         out.push(
           (rowEl = h(
             'div',
@@ -667,7 +685,7 @@ function bomSheet(ctx) {
             field('qty', item.qty, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Quantity of ${item.label || 'item'}` }, (v) => set('qty', num(v))),
             field('rate', item.rate, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Price each of ${item.label || 'item'}` }, (v) => set('rate', num(v))),
             amountEl,
-            h('span', { class: 'linkcell' }, link, open),
+            h('span', { class: 'linkcell' }, link, shop, pencil),
             tools,
           )),
         );
@@ -717,11 +735,12 @@ function bomTable(ctx, merged) {
     if (!sec.items.length) continue;
     rows.push(h('tr', { class: 'sec' }, cell('td', sec.title), cell('td', ''), cell('td', ''), cell('td', ''), cell('td', money(sum(sec.items)), 'n'), cell('td', '')));
     for (const i of sec.items) {
-      rows.push(h('tr', {}, cell('td', i.label), cell('td', i.desc), cell('td', i.qty ?? '', 'n'), cell('td', money(i.rate), 'n'), cell('td', money(cost(i)), 'n'), cell('td', i.link)));
+      const vendor = isUrl(i.link) ? h('td', {}, h('a', { href: i.link.trim() }, vendorName(i.link))) : cell('td', i.link);
+      rows.push(h('tr', {}, cell('td', i.label), cell('td', i.desc), cell('td', i.qty ?? '', 'n'), cell('td', money(i.rate), 'n'), cell('td', money(cost(i)), 'n'), vendor));
     }
   }
   rows.push(h('tr', { class: 'total' }, cell('td', 'Total'), cell('td', ''), cell('td', ''), cell('td', ''), cell('td', money(sum(merged.sections.flatMap((s) => s.items))), 'n'), cell('td', '')));
-  return h('table', { class: 'print-table' }, h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Link / contact'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))), h('tbody', {}, rows));
+  return h('table', { class: 'print-table' }, h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))), h('tbody', {}, rows));
 }
 
 // the parts list's own PDF is the browser's print to PDF of the plain table, and nothing else on the page
