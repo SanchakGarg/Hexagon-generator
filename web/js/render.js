@@ -53,7 +53,7 @@ const line = (pts, y) => pts.map((p, i) => `${i ? 'L' : 'M'}${fmt(p.x)},${fmt(y(
 
 // Each chain's signal wire in its own colour (solid on SIG, dashed on FREE), 5V and GND the same everywhere, a
 // connector bar at both ends of every channel, chevrons for the data direction and a ring where a chain switches wire.
-function wiringSvg(w, y) {
+export function wiringSvg(w, y) {
   const out = ['<g class="wiring">'];
   for (const s of w.sheaths) out.push(`<path class="sheath" data-chain="${s.chain}" data-hex="${s.hexId}" d="${line(s.points, y)}" stroke-width="${fmt(w.lane * 4.4)}"/>`);
   // a wide invisible strip along each channel, a fixed size on screen, so a wire is easy to hover from far out
@@ -124,7 +124,7 @@ export function arrowsSvg(arrows, jumps, lat, y) {
 // dot where it starts and chevrons toward where it goes; a ring marks a node that takes its own. Each outer node's
 // group goes on to M as a twisted SDA / SCL pair.
 export const groupClass = (g) => (g === 'M' ? 't-m' : `t-${g.slice(1)}`);
-function sensorsSvg(s, lat, y) {
+export function sensorsSvg(s, lat, y) {
   const out = ['<g class="wiring touch">'];
   for (const r of s.runs) {
     const attrs = `data-chain="${r.group}" data-hex="${r.hexId}"`;

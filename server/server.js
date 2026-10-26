@@ -25,6 +25,7 @@ const TYPES = {
   '.stl': 'model/stl',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.glb': 'model/gltf-binary',
 };
 
 const send = (res, code, body, type = 'text/plain; charset=utf-8') => {

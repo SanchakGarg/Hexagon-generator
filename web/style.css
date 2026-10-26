@@ -977,14 +977,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .wiring .twist { stroke: var(--w); stroke-width: 1.8px; }
 .wiring .twist.back { stroke: color-mix(in srgb, var(--w) 65%, var(--ink)); }
 
-.wiring-switch { position: absolute; top: 14px; left: 50%; translate: -50% 0; z-index: 3; background: var(--page); }
-.app:not([data-page="3"]) .wiring-switch { display: none; }
-/* paler LED channels behind the wiring, read by the drawing and the 3D model alike */
-.app[data-page="3"] { --c-led: var(--c-led-soft); }
-.app:not([data-wview="channels"]) [data-wview-only="channels"],
-.app:not([data-wview="wiring"]) [data-wview-only="wiring"],
-.app:not([data-wview="touch"]) [data-wview-only="touch"],
-.app[data-wview="touch"] [data-wview-not="touch"] { display: none; }
+/* paler LED channels behind the sensor wiring, read by the drawing and the 3D model alike */
+.app[data-page="2"] { --c-led: var(--c-led-soft); }
 
 /* the wiring key in the notes card */
 .labels-key { width: 280px; }
@@ -1096,12 +1090,14 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 .card[data-section="notes"] { --tape: var(--lilac); }
 .card[data-section="nodes"] { --tape: var(--lilac); }
+.card[data-section="sensors"] { --tape: var(--rose); }
 
 /* one page at a time */
 .app:not([data-page="1"]) [data-page-only="1"],
 .app:not([data-page="2"]) [data-page-only="2"],
 .app:not([data-page="3"]) [data-page-only="3"],
-.app:not([data-page="4"]) [data-page-only="4"] { display: none; }
+.app:not([data-page="4"]) [data-page-only="4"],
+.app[data-page="4"] [data-page-not="4"] { display: none; }
 
 .card.totals { display: flex; flex-direction: column; max-height: calc(100% - 90px); pointer-events: auto; }
 /* scrolls by wheel, touch or keys, with no bar drawn */
@@ -1289,21 +1285,62 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 .tooltip::first-line { font: 1.15rem var(--hand); }
 
-/* --- page 4: the build guide, a sketchbook of sheets --------------------------------------------------------- */
+/* --- page 4: the assembly guide, a book of sheets read one at a time ----------------------------------------- */
 
-.app[data-page="4"] { grid-template-columns: minmax(0, 1fr); }
-.app[data-page="4"] .side,
 .app[data-page="4"] .viewport { display: none; }
 /* a shared link is only its guide */
 .app[data-shared] .tabs,
-.app[data-shared] .footer { display: none; }
-.app[data-shared] { grid-template-rows: minmax(0, 1fr); }
+.app[data-shared] #edit-design { display: none; }
 .app[data-shared] .stage::before { top: 0; }
 
+/* the guide's side panel: download and share, then the contents */
+.guide-tools { --tape: var(--butter); display: flex; flex-direction: column; gap: 10px; padding-top: 16px; }
+.share-out { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 1rem; color: var(--muted); }
+.share-out .url { flex: 1 1 100%; min-width: 0; font: 0.8rem var(--mono); padding: 4px 6px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.share-out .btn { font-size: 1rem; padding: 1px 12px; }
+.share-out .err { color: var(--accent); }
+.link-btn { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--muted); font: 1.05rem var(--hand); cursor: pointer; }
+.link-btn:hover { color: var(--accent); }
+.toc-card { --tape: var(--mint); padding-top: 14px; }
+.toc { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.toc button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: 1.12rem var(--hand);
+  text-align: left;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toc button:hover { background: color-mix(in srgb, var(--sky) 40%, transparent); }
+.toc button:focus-visible { outline: 2px dashed var(--accent); outline-offset: 1px; }
+.toc-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1.6px solid var(--ink);
+  border-radius: 50%;
+  font-size: 0.95rem;
+  background: var(--page);
+}
+.toc button[aria-current="page"] { background: color-mix(in srgb, var(--butter) 70%, transparent); }
+.toc button[aria-current="page"] .toc-num { background: var(--rose); color: #2a2a3c; box-shadow: 1px 2px 0 var(--ink); }
+
 .playbook {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  perspective: 2200px;
   padding: 18px 8px 40px 34px;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
@@ -1332,6 +1369,39 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   rotate: -0.25deg;
 }
 .sheet:nth-of-type(even) { rotate: 0.3deg; }
+/* one sheet at a time */
+.playbook > .sheet:not(.current):not(.turning) { display: none; }
+
+/* turning a page: the sheet swings round its left edge, the spine, like a page of a book, a shadow deepening as
+   it goes; the one beneath waits flat */
+.playbook > .sheet.turn-out,
+.playbook > .sheet.under { position: absolute; left: 34px; right: 8px; margin-inline: auto; }
+.playbook > .sheet.turn-out { z-index: 3; transform-origin: left center; backface-visibility: hidden; animation: turn-out 0.75s cubic-bezier(0.45, 0.05, 0.3, 1) forwards; }
+.playbook > .sheet.turn-in { z-index: 3; transform-origin: left center; backface-visibility: hidden; animation: turn-in 0.75s cubic-bezier(0.45, 0.05, 0.3, 1) both; }
+.playbook > .sheet.under { z-index: 1; }
+.playbook > .sheet.turn-out::after,
+.playbook > .sheet.turn-in::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(20, 20, 40, 0.28), rgba(20, 20, 40, 0) 70%);
+  animation: turn-shade 0.75s ease-in forwards;
+}
+.playbook > .sheet.turn-in::after { animation-direction: reverse; }
+@keyframes turn-out {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(-115deg); opacity: 0.6; }
+}
+@keyframes turn-in {
+  from { transform: rotateY(-115deg); opacity: 0.6; }
+  to { transform: rotateY(0deg); }
+}
+@keyframes turn-shade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .sheet::before {
   content: "";
   position: absolute;
@@ -1369,7 +1439,67 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   rotate: -6deg;
 }
 
-.cover h1 { font-size: 3rem; margin: 2px 0 10px; }
+.cover-title { font-size: 3rem; margin: 2px 0 10px; }
+.print-only { display: none; }
+
+/* explore the whole wall: drag to pan, buttons to zoom */
+.pb-zoomwrap { position: relative; margin: 14px 0 4px; border: 1.5px dashed var(--line); border-radius: 10px; overflow: hidden; }
+.pb-zoomwrap .pb-wall { margin: 0; touch-action: pan-y; }
+.pb-zoomwrap .pb-wall.panning { cursor: grabbing; }
+.pb-zoombar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+.pb-zoombar .btn { width: 32px; padding: 0; font-size: 1.15rem; line-height: 26px; }
+.pb-nhit { fill: transparent; stroke: transparent; stroke-width: 2.4px; vector-effect: non-scaling-stroke; cursor: help; transition: stroke 0.15s, fill 0.15s; }
+.pb-nhit:hover, .pb-nhit.on { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 16%, transparent); }
+.pb-nhit.clash { stroke: var(--accent); stroke-dasharray: 3 3; }
+.pb-wall.wires, .pb-zoom.wires { cursor: default; }
+
+/* steps link on to their pages */
+.pb-go { border: 0; background: none; padding: 2px 0; margin-top: 4px; color: var(--accent); font: 1.12rem var(--hand); cursor: pointer; }
+.pb-go:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pb-gos { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+
+/* two columns of notes, one under the other on a phone */
+.pb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 30px; }
+.pb-cols.narrow { grid-template-columns: minmax(240px, 300px) minmax(220px, 1fr); align-items: start; margin: 8px 0; }
+.pb-defs { margin: 6px 0 0; }
+.pb-defs dt { font-size: 1.3rem; margin-top: 8px; }
+.pb-defs dd { margin: 0 0 0 18px; font-size: 1.15rem; line-height: 1.4; color: var(--ink); max-width: 70ch; }
+
+.pb-table { border-collapse: collapse; margin: 8px 0 4px; font-size: 1.1rem; min-width: min(100%, 460px); }
+.pb-table th, .pb-table td { text-align: left; padding: 4px 14px 4px 4px; border-bottom: 1.5px solid var(--rule); vertical-align: middle; }
+.pb-table th { color: var(--muted); font-weight: 400; border-bottom-color: var(--line); }
+.pb-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.pb-table .sw { vertical-align: -2px; width: 13px; height: 13px; }
+.pb-table.dips td { font-family: var(--mono); font-size: 0.8rem; white-space: nowrap; }
+.pb-table.dips td span { margin-right: 8px; }
+.pb-table.dips .on { color: var(--accent); font-weight: 600; }
+.pb-table.dips .off { color: var(--muted); }
+.pb-table.dips tr.clash td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pb-all { margin-top: 16px; }
+.pb-all > summary { justify-content: flex-start; font-size: 1.3rem; }
+.pb-all > summary::after { margin-left: 8px; }
+.pb-all .pb-table { width: 100%; }
+.pb-all { overflow-x: auto; }
+
+/* each node's switches, a card each */
+.sw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 8px; }
+.sw-card { border: 1.6px solid var(--ink); border-radius: 10px; padding: 8px 10px 8px; background: var(--page); box-shadow: 2px 3px 0 var(--shadow); transition: background 0.15s, translate 0.15s; }
+.sw-card.on { background: color-mix(in srgb, var(--butter) 50%, var(--page)); translate: 0 -2px; }
+.sw-card.central { background: color-mix(in srgb, var(--c-mcu) 18%, var(--page)); }
+.sw-card.clash { border-color: var(--accent); border-style: dashed; }
+.sw-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px !important; font-size: 1.05rem !important; color: var(--muted); }
+.sw-head b { font: 600 1.05rem var(--mono); color: var(--ink); min-width: 1.6em; }
+.sw-note, .sw-links { margin: 4px 0 0 !important; font-size: 0.95rem !important; line-height: 1.3 !important; color: var(--muted); }
+.sw-links { font-family: var(--mono); font-size: 0.72rem !important; }
+.sw-warn { margin: 6px 0 0 !important; font-size: 1rem !important; line-height: 1.3 !important; color: var(--accent); }
+.dip { display: block; width: 100%; max-width: 240px; height: auto; margin: 2px 0; }
+.dip .dip-body { fill: #d8463c; stroke: var(--ink); stroke-width: 1.2; }
+.dip .dip-slot { fill: #3a1512; }
+.dip .dip-knob { fill: #f2efe6; stroke: #2a2a3c; stroke-width: 0.8; }
+.dip .dip-knob.on { fill: #fffdf8; }
+.dip text { font: 600 8px var(--mono); fill: var(--muted); }
+.dip .dip-sw { fill: var(--ink); }
+.dip .dip-on { fill: #fffdf8; font-size: 6px; }
 .doodles { padding-left: 0; list-style: none; }
 .doodles li { position: relative; padding-left: 30px; margin: 4px 0; }
 .doodles li::before { content: "✦"; position: absolute; left: 4px; color: var(--accent); }
@@ -1409,10 +1539,10 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 /* drawings */
 .pb-wall, .pb-zoom, .pb-channel { display: block; width: 100%; height: auto; overflow: visible; }
 .pb-wall { max-height: 520px; margin: 14px 0 4px; }
-.pb-zoom { max-height: 460px; }
-.pb-wall.pick .pb-hex { cursor: pointer; }
+.pb-zoom { max-height: 600px; }
+.pb-wall.pickable .pb-hex { cursor: pointer; }
 .pb-hex .fill { fill: transparent; stroke: none; }
-.pb-wall.pick .pb-hex:hover .fill { fill: color-mix(in srgb, var(--mint) 40%, transparent); }
+.pb-wall.pickable .pb-hex:hover .fill { fill: color-mix(in srgb, var(--mint) 40%, transparent); }
 .pb-hex .sketch { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .pb-hex .sketch + .sketch { stroke-width: 0.9; opacity: 0.5; }
 .pb-edge { fill: color-mix(in srgb, var(--c-hex) 60%, transparent); stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -1472,9 +1602,15 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 /* the node's layers, turning */
 .pb-parts { position: relative; height: 260px; margin-top: 8px; cursor: grab; touch-action: pan-y; }
+.pb-parts.four { height: 230px; }
+.pb-parts.two { height: 300px; }
+.pb-parts.one { height: 170px; }
+.print-still { display: none; }
 .pb-parts:active { cursor: grabbing; }
 .pb-parts-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .pb-parts-captions { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; gap: 10px; }
+.pb-parts-captions.four { grid-template-columns: repeat(4, 1fr); }
+.pb-parts-captions.two { grid-template-columns: repeat(2, 1fr); }
 .pb-parts-captions b { display: block; font-weight: 400; font-size: 1.45rem; }
 .pb-parts-captions span { color: var(--muted); font-size: 1.1rem; }
 
@@ -1555,20 +1691,57 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 #pb-print { display: none; }
 
+/* while the book is being printed every sheet is laid out, so the 3D figures can be photographed at their size */
+body.print-book .playbook > .sheet { display: block !important; }
+
 @media print {
   @page { margin: 14mm; }
   html, body { height: auto; background: #fff !important; color: #000; }
   body::before { display: none; }
-  body > :not(#pb-print) { display: none !important; }
-  #pb-print { display: block; font: 11pt/1.35 system-ui, sans-serif; color: #000; }
+
+  /* the parts list on its own */
+  body.print-bom > :not(#pb-print) { display: none !important; }
+  body.print-bom #pb-print { display: block; font: 11pt/1.35 system-ui, sans-serif; color: #000; }
   #pb-print h1 { font-size: 16pt; margin: 0 0 2pt; }
   #pb-print p { margin: 0 0 10pt; color: #555; }
-  #pb-print table { width: 100%; border-collapse: collapse; }
-  #pb-print th, #pb-print td { border: 0.5pt solid #999; padding: 3pt 5pt; text-align: left; vertical-align: top; word-break: break-word; }
-  #pb-print th { background: #eee; }
-  #pb-print .n { text-align: right; white-space: nowrap; }
-  #pb-print tr.sec td { font-weight: 600; background: #f6f6f6; }
-  #pb-print tr.total td { font-weight: 700; border-top: 1.5pt solid #000; }
+  .print-table { width: 100%; border-collapse: collapse; font: 10pt/1.35 system-ui, sans-serif; }
+  .print-table th, .print-table td { border: 0.5pt solid #999; padding: 3pt 5pt; text-align: left; vertical-align: top; word-break: break-word; }
+  .print-table th { background: #eee; }
+  .print-table .n { text-align: right; white-space: nowrap; }
+  .print-table tr.sec td { font-weight: 600; background: #f6f6f6; }
+  .print-table tr.total td { font-weight: 700; border-top: 1.5pt solid #000; }
+
+  /* the whole book: each sheet on its own pages, in the light theme's colours */
+  body.print-book { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.print-book > :not(.app) { display: none !important; }
+  body.print-book .app { display: block; height: auto; padding: 0; }
+  body.print-book .side,
+  body.print-book .tabs,
+  body.print-book .footer,
+  body.print-book .viewport,
+  body.print-book .stage::before,
+  body.print-book .no-print,
+  body.print-book .pb-browser-bar,
+  body.print-book .pb-zoombar,
+  body.print-book .pb-bom { display: none !important; }
+  body.print-book .stage { display: block; padding: 0; }
+  body.print-book .playbook { overflow: visible; padding: 0; perspective: none; }
+  body.print-book .sheet { break-before: page; rotate: none !important; box-shadow: none; max-width: none; margin: 0; padding: 0; background: none; animation: none !important; transform: none !important; position: static !important; }
+  body.print-book .sheet:first-child { break-before: auto; }
+  body.print-book .sheet::before, body.print-book .sheet::after { display: none; }
+  body.print-book .print-only { display: block; }
+  body.print-book .print-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2pt 12pt; padding: 0 0 6pt; margin-bottom: 10pt; border-bottom: 1pt solid #999; font: 10pt/1.4 system-ui, sans-serif; color: #333; }
+  body.print-book .print-head .link { flex-basis: 100%; }
+  body.print-book .print-head a { color: #1c5fbf; word-break: break-all; }
+  body.print-book .pb-3d canvas { display: none; }
+  body.print-book .print-still { display: block; width: 100%; height: 100%; object-fit: contain; }
+  body.print-book .pb-wall, body.print-book .pb-zoom { max-height: 150mm; break-inside: avoid; }
+  body.print-book .pb-browser { border: 0; padding: 0; }
+  body.print-book .sw-cards { grid-template-columns: repeat(4, 1fr); gap: 6pt; }
+  body.print-book .sw-card { break-inside: avoid; box-shadow: none; }
+  body.print-book .pb-all > summary { list-style: none; }
+  body.print-book .pb-table.dips { font-size: 8pt; }
+  body.print-book tr { break-inside: avoid; }
 }
 
 @media (max-width: 760px) {
@@ -1578,7 +1751,11 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .sheet-title { font-size: 1.7rem; }
   .cover h1 { font-size: 2.2rem; }
   .steps > li { padding-left: 50px; }
-  .pb-parts { height: 180px; }
+  .pb-parts, .pb-parts.four, .pb-parts.two { height: 180px; }
+  .pb-parts-captions b { font-size: 1.15rem; }
+  .pb-parts-captions span { font-size: 0.95rem; }
+  .pb-cols.narrow { grid-template-columns: minmax(0, 1fr); }
+  .playbook > .sheet.turn-out, .playbook > .sheet.under { left: 22px; right: 0; }
 }
 
 /* --- small screens: drawing first, then the panel below it ---------------------- */
@@ -1601,7 +1778,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   .hint { display: none; }
   .pick-bar { left: 24px; bottom: auto; top: 56px; max-width: calc(100% - 40px); }
   /* keeps clear of the spiral binding down the drawing's left edge */
-  .wiring-switch { top: 52px; left: auto; right: 16px; translate: none; }
   .card.totals { right: 10px; bottom: 10px; min-width: 0; max-width: calc(100% - 44px); max-height: calc(100% - 64px); padding: 8px 12px 6px; }
   .bom { min-width: 0; }
   .labels-key { width: auto; max-width: 280px; }

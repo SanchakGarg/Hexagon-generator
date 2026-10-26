@@ -373,3 +373,84 @@ export function sensorPaths({ runs: single, selfs, trunks = [] }, lat) {
   for (const s of selfs) out.rings.push({ group: s.group, hexId: s.hexId, x: s.node.x, z: s.node.z, node: nm(s.node) });
   return out;
 }
+
+// --- the General Node's DIP switches: which positions each node needs so every chain's data takes its path --------
+//
+// From the KiCad netlist (Circuits/GeneralNode): the board has six LED ports L1–L6, pins 1 5V, 2 SIG, 3 FREE, 4 GND,
+// and four 2-way DIP switches. Position 1 of a switch joins its pins 1 and 4, position 2 its pins 2 and 3, and each
+// joins two port pins. L1 is the node-1 side of the node and the others follow clockwise, as on the board's front.
+// The MCU node is a Central Node, which drives its six ports straight from the ESP32 and has no switches.
+export const DIP_CONTACTS = [
+  { sw: 1, pos: 1, a: 'L1.SIG', b: 'L5.SIG' },
+  { sw: 1, pos: 2, a: 'L5.FREE', b: 'L3.SIG' },
+  { sw: 2, pos: 1, a: 'L3.SIG', b: 'L4.FREE' },
+  { sw: 2, pos: 2, a: 'L3.FREE', b: 'L4.SIG' },
+  { sw: 3, pos: 1, a: 'L3.FREE', b: 'L5.SIG' },
+  { sw: 3, pos: 2, a: 'L3.SIG', b: 'L1.SIG' },
+  { sw: 4, pos: 1, a: 'L6.SIG', b: 'L5.SIG' },
+  { sw: 4, pos: 2, a: 'L1.SIG', b: 'L2.SIG' },
+];
+const DIP_PINS = [...new Set(DIP_CONTACTS.flatMap((c) => [c.a, c.b]))];
+
+// the port of node n on the side facing node x
+const portTo = (n, x) => {
+  const a = (Math.atan2(x.z - n.z, x.x - n.x) * 180) / Math.PI;
+  return `L${((Math.round((n.facing - a) / 60) % 6) + 6) % 6 + 1}`;
+};
+
+// For every node a chain passes through, the links it needs (the pin its data comes in on to the pin it goes out
+// on), and the fewest switch positions that make them all without joining two chains, or joining a link to any
+// other pin of a port that has a channel plugged in. Where no setting manages that, the nearest one is given with
+// `clash` naming the extra pins it ties in. Returns a Map from node to { dip: [[pos1, pos2] × 4], links, clash }.
+export function switchSettings({ chains, channels }) {
+  const info = new Map();
+  const of = (n) => {
+    if (!info.has(n)) info.set(n, { links: [], plugged: new Set() });
+    return info.get(n);
+  };
+  for (const c of channels) {
+    if (c.in.facing == null || c.out.facing == null) continue;
+    of(c.in).plugged.add(portTo(c.in, c.out));
+    of(c.out).plugged.add(portTo(c.out, c.in));
+  }
+  for (const chain of chains) {
+    for (let i = 1; i < chain.hops.length; i++) {
+      const a = chain.hops[i - 1];
+      const b = chain.hops[i];
+      const n = a.to;
+      if (n.facing == null) continue;
+      of(n).links.push({ chain: chain.id, hexId: chain.hexId, from: `${portTo(n, a.from)}.${a.wire}`, to: `${portTo(n, b.to)}.${b.wire}` });
+    }
+  }
+  const out = new Map();
+  for (const [n, { links, plugged }] of info) {
+    if (n.kind === 'mcu') continue;
+    const used = new Set(links.flatMap((l) => [l.from, l.to]));
+    let best = null;
+    for (let m = 0; m < 1 << DIP_CONTACTS.length; m++) {
+      const up = {};
+      const find = (p) => (up[p] ??= p) === p ? p : (up[p] = find(up[p]));
+      DIP_CONTACTS.forEach((c, i) => m & (1 << i) && (up[find(c.a)] = find(c.b)));
+      if (!links.every((l) => find(l.from) === find(l.to))) continue;
+      const owner = {};
+      let apart = true;
+      for (const l of links) {
+        const r = find(l.from);
+        if (owner[r] && owner[r] !== `${l.hexId}:${l.chain}`) apart = false;
+        owner[r] = `${l.hexId}:${l.chain}`;
+      }
+      if (!apart) continue;
+      // pins tied into a link that it does not need: a clash if a channel is plugged into that port
+      const extra = DIP_PINS.filter((p) => owner[find(p)] && !used.has(p));
+      const clash = extra.filter((p) => plugged.has(p.split('.')[0]));
+      let on = 0;
+      for (let i = 0; i < DIP_CONTACTS.length; i++) if (m & (1 << i)) on++;
+      const score = clash.length * 1000 + on * 10 + extra.length;
+      if (!best || score < best.score) best = { m, score, clash };
+    }
+    const m = best?.m ?? 0;
+    const dip = [1, 2, 3, 4].map((sw) => [1, 2].map((pos) => !!(m & (1 << DIP_CONTACTS.findIndex((c) => c.sw === sw && c.pos === pos)))));
+    out.set(n, { dip, links, clash: best?.clash.length ? best.clash : null, solved: !!best });
+  }
+  return out;
+}

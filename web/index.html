@@ -28,7 +28,7 @@
     </filter>
   </svg>
 
-  <div class="app" data-page="1" data-wview="channels">
+  <div class="app" data-page="1">
     <aside class="side">
       <header class="masthead">
         <div>
@@ -90,7 +90,18 @@
         </div>
       </details>
 
-      <details class="card" data-section="nodes" data-page-only="2" open>
+      <details class="card" data-section="sensors" data-page-only="2" open>
+        <summary><h2>Touch sensors</h2></summary>
+        <div class="card-body">
+          <p class="help">Every node can feel a touch. Click nodes on the drawing to pick them, then leave their sensors out; the sensor wiring follows.</p>
+          <div class="lines tally">
+            <p class="line"><span>With a sensor</span><b id="tally-sensors">–</b></p>
+            <p class="line"><span>Without</span><b id="tally-nosensor">–</b></p>
+          </div>
+        </div>
+      </details>
+
+      <details class="card" data-section="nodes" data-page-only="3" open>
         <summary><h2>Nodes</h2></summary>
         <div class="card-body">
           <div class="lines tally">
@@ -100,7 +111,22 @@
         </div>
       </details>
 
-      <details class="card" data-section="show" open>
+      <!-- the assembly guide: download and share at the top, then its contents -->
+      <div class="card guide-tools" data-page-only="4">
+        <div class="actions">
+          <button type="button" class="btn primary" id="pdf-btn" title="Download the whole guide as a PDF, through your browser's print dialog">Download PDF</button>
+          <button type="button" class="btn" id="share-btn" title="Make a link anyone can open this guide with">Share link</button>
+        </div>
+        <div class="share-out" id="share-out" hidden></div>
+        <button type="button" class="link-btn" id="edit-design">← Back to the design</button>
+      </div>
+
+      <nav class="card toc-card" data-page-only="4" aria-labelledby="toc-title">
+        <h2 id="toc-title">Contents</h2>
+        <ol class="toc" id="toc"></ol>
+      </nav>
+
+      <details class="card" data-section="show" data-page-not="4" open>
         <summary><h2 id="layers-title">Show</h2></summary>
         <div class="card-body">
           <div class="toggles" role="group" aria-labelledby="layers-title" id="layers">
@@ -143,11 +169,6 @@
       </nav>
       <div class="viewport" id="viewport">
         <svg id="stage-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wall layout, front view"></svg>
-        <div class="seg wiring-switch" role="group" aria-label="What the connections and wiring page draws" id="wiring-switch">
-          <button type="button" data-wview="channels" aria-pressed="true">LED channels</button>
-          <button type="button" data-wview="wiring" aria-pressed="false">Strip wiring</button>
-          <button type="button" data-wview="touch" aria-pressed="false">Touch sensors</button>
-        </div>
         <div class="seg view-switch" role="group" aria-label="View">
           <button type="button" id="view-2d" aria-pressed="true">2D</button>
           <button type="button" id="view-3d" aria-pressed="false" disabled>3D</button>
@@ -171,75 +192,30 @@
                 <p class="line"><span>LED channels</span><b id="total-leds">–</b></p>
               </div>
             </div>
-            <div class="labels-key" data-page-only="3">
-              <h2>Node labels</h2>
-              <p class="help">The same in every hexagon</p>
-              <div class="lines">
-                <p class="line"><span>MCU node</span><b>M</b></p>
-                <p class="line"><span>Built-in, clockwise</span><b>1, 2, …</b></p>
-                <p class="line"><span>Corners, clockwise</span><b>a–f</b></p>
-                <p class="line"><span>Edge plates</span><b>E1–E3</b></p>
-              </div>
-              <h2 class="key-head" data-wview-only="wiring">Wiring</h2>
-              <h2 class="key-head" data-wview-only="channels">LED channels</h2>
-              <p class="help" data-wview-only="wiring">Each hexagon's M drives six chains. Hover one to pick it out.</p>
-              <p class="help" data-wview-only="channels">Each arrow runs from a channel's DIN to its DOUT, in the colour of the chain that drives it. Hover one to watch its signal run down the chain, through the dotted bypass where it jumps onto a channel's FREE wire and back.</p>
-              <h2 class="key-head" data-wview-only="touch">Touch sensors</h2>
-              <p class="help" data-wview-only="touch">Each node's sensor is wired, from the dot, to M or to T1, T2, T3 (collected at nodes 3, 6, 9); a ring is a node that takes its own. T1, T2 and T3 each go on to M as a twisted SDA / SCL pair: 3 → 4 → M, 6 → 7 → M, 9 → 1 → M. Hover one to pick it out.</p>
-              <div class="wkey tkey" id="touch-key" data-wview-only="touch">
+            <div class="labels-key" data-page-only="2">
+              <h2>Touch sensors</h2>
+              <p class="help">Each node's sensor is wired, from the dot, to M or to T1, T2, T3 (collected at nodes 3, 6, 9); a ring is a node that takes its own. A struck-through node has no sensor. Hover a group to pick it out.</p>
+              <div class="wkey tkey" id="touch-key">
                 <p class="chain t-m" data-chain="M"><i class="swatch"></i><b>M</b></p>
                 <p class="chain t-1" data-chain="T1"><i class="swatch"></i><b>T1</b></p>
                 <p class="chain t-2" data-chain="T2"><i class="swatch"></i><b>T2</b></p>
                 <p class="chain t-3" data-chain="T3"><i class="swatch"></i><b>T3</b></p>
               </div>
-              <div class="wkey" id="wiring-key" data-wview-not="touch">
-                <p class="chain w-1" data-chain="L1"><i class="swatch"></i><b>L1</b></p>
-                <p class="chain w-2" data-chain="L2"><i class="swatch"></i><b>L2</b></p>
-                <p class="chain w-3" data-chain="L3"><i class="swatch"></i><b>L3</b></p>
-                <p class="chain w-4" data-chain="L4"><i class="swatch"></i><b>L4</b></p>
-                <p class="chain w-5" data-chain="L5"><i class="swatch"></i><b>L5</b></p>
-                <p class="chain w-6" data-chain="L6"><i class="swatch"></i><b>L6</b></p>
-              </div>
-              <div class="conn-key" data-wview-only="wiring">
-                <h2 class="key-head">Connectors</h2>
-                <p class="help">A 2510 4-pin connector at each end of every channel, pins 1–4 in the same order at both ends.</p>
-                <!-- one channel, IN on the left: SIG runs through the LEDs, FREE runs past them -->
-                <svg class="conn-diagram" viewBox="0 0 280 118" role="img" aria-label="A channel with a 4-pin connector at each end: 5V, SIG, FREE and GND. SIG runs through the LEDs from DIN to DOUT; FREE runs straight past them.">
-                  <text class="cap" x="58" y="11" text-anchor="middle">IN · DIN</text>
-                  <text class="cap" x="222" y="11" text-anchor="middle">OUT · DOUT</text>
-                  <rect class="body" x="66" y="18" width="148" height="92" rx="5"/>
-                  <g class="pins">
-                    <text x="4" y="34">1 5V</text><text x="4" y="56">2 SIG</text><text x="4" y="78">3 FREE</text><text x="4" y="100">4 GND</text>
-                  </g>
-                  <rect class="plug" x="50" y="20" width="16" height="88" rx="2"/>
-                  <rect class="plug" x="214" y="20" width="16" height="88" rx="2"/>
-                  <line class="v5" x1="58" y1="30" x2="222" y2="30"/>
-                  <line class="gnd" x1="58" y1="96" x2="222" y2="96"/>
-                  <line class="free" x1="58" y1="74" x2="222" y2="74"/>
-                  <path class="sig" d="M58 52 H222"/>
-                  <g class="leds"><rect x="86" y="45" width="14" height="14" rx="2"/><rect x="122" y="45" width="14" height="14" rx="2"/><rect x="158" y="45" width="14" height="14" rx="2"/></g>
-                  <path class="chev" d="M107 48 l5 4 -5 4 M143 48 l5 4 -5 4 M179 48 l5 4 -5 4"/>
-                  <g class="dots"><circle cx="58" cy="30" r="2.6"/><circle cx="58" cy="52" r="2.6"/><circle cx="58" cy="74" r="2.6"/><circle cx="58" cy="96" r="2.6"/><circle cx="222" cy="30" r="2.6"/><circle cx="222" cy="52" r="2.6"/><circle cx="222" cy="74" r="2.6"/><circle cx="222" cy="96" r="2.6"/></g>
-                  <text class="note" x="236" y="56">→ next</text>
-                  <text class="note" x="236" y="78">bypass</text>
-                </svg>
-                <p class="help">At a turn (E1–E3, or a neighbour's 3, 6, 9) a chain's DOUT SIG is jumped to pin 3 FREE of its partner channel, rides back past the LEDs, and is jumped to that channel's DIN SIG again at the inner node: the dotted rings. 5V and GND run through every connector. A coloured bar on the drawing marks a channel's IN end.</p>
-              </div>
             </div>
-            <div data-page-only="2">
+            <div data-page-only="3">
               <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span><button type="button" class="btn" id="bom-xlsx" title="Download the parts list as an Excel sheet you can edit">Excel</button></div>
               <div class="lines bom" id="bom"></div>
             </div>
           </div>
         </aside>
       </div>
-      <!-- page 4: the build guide, a sketchbook of sheets read top to bottom -->
-      <div class="playbook" id="playbook" data-page-only="4" aria-label="Build guide"></div>
+      <!-- page 4: the assembly guide, a book of sheets read one at a time -->
+      <div class="playbook" id="playbook" data-page-only="4" aria-label="Assembly guide"></div>
     </main>
 
     <footer class="footer">
       <div class="footer-pages">
-        <span class="page-count" id="page-count">Page 1 of 4 · Configure</span>
+        <span class="page-count" id="page-count">Page 1 of 3 · Configure</span>
         <button type="button" class="btn" id="back-btn" hidden>Back</button>
         <button type="button" class="btn primary" id="next-btn">Next</button>
       </div>
@@ -263,7 +239,7 @@
   </dialog>
 
   <div class="tooltip" id="tooltip" hidden></div>
-  <!-- the build guide's parts list as a plain table, filled just before printing; only it prints -->
+  <!-- the parts list as a plain table, filled just before its own PDF is printed -->
   <div id="pb-print" aria-hidden="true"></div>
   <!-- a short note that pops up after a save -->
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

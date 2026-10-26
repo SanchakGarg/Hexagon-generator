@@ -1,10 +1,10 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes, plateFacing } from './layout.js';
 import { renderWall } from './render.js';
-import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths } from './wiring.js';
+import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths, switchSettings } from './wiring.js';
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
-import { renderPlaybook } from './playbook.js';
+import { renderPlaybook, showGuidePage, GUIDE_PAGES } from './playbook.js';
 import { buildBom } from './parts.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
@@ -12,14 +12,13 @@ const DECIMALS = { mm: 0, m: 3, in: 1 };
 const HINTS = {
   '2d': 'Hover to lift · click to select · scroll to zoom · drag to pan · double-click to reset',
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
-  labels: 'Hover a wire or connector for its pins · scroll to zoom · drag to pan · double-click to reset',
-  channels: 'Hover a channel for its DIN and DOUT · scroll to zoom · drag to pan · double-click to reset',
-  touch: 'Hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
-  parts: 'Click nodes to pick them · scroll to zoom · drag to pan · double-click to reset',
+  sensors: 'Click nodes to pick them · hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
+  parts: 'Scroll to zoom · drag to pan · double-click to reset',
 };
-const PAGES = ['Configure', 'Parts list', 'Connections and wiring', 'Build guide'];
-const PARTS_PAGE = 2;
-const LABELS_PAGE = 3;
+// the configurator's pages; Finish on the last one opens the assembly guide
+const PAGES = ['Configure', 'Touch sensors', 'Parts list'];
+const SENSOR_PAGE = 2;
+const PARTS_PAGE = 3;
 const PLAYBOOK_PAGE = 4;
 // the parts list, its prices and the build constants come from parts.xlsx, which the server reads as it starts
 let partsDef = null;
@@ -65,7 +64,7 @@ let page = 1;
 const keyOf = (h) => `${h.row}:${h.col}`;
 const selected = new Set();
 const excluded = new Set();
-// on the parts page single nodes are picked, and some can be built without a touch sensor
+// on the touch sensors page single nodes are picked, and some can be built without a touch sensor
 const nodePicks = new Set();
 const noSensor = new Set();
 let allNodes = [];
@@ -97,9 +96,9 @@ function resetZoom() {
 }
 
 // selection and exclusion live in a strip on the drawing, shown only while there is something to act on; on the
-// parts page the same strip picks nodes and leaves their touch sensors out
+// touch sensors page the same strip picks nodes and leaves their touch sensors out
 function renderPicks() {
-  const parts = page === PARTS_PAGE;
+  const parts = page === SENSOR_PAGE;
   const present = new Set(allNodes.map((n) => n.key));
   const sel = parts ? nodePicks.size : gridHexes.filter((h) => selected.has(keyOf(h))).length;
   const exc = parts ? [...noSensor].filter((k) => present.has(k)).length : gridHexes.filter((h) => excluded.has(keyOf(h))).length;
@@ -111,8 +110,8 @@ function renderPicks() {
   restoreBtn.textContent = parts ? 'Add sensors back' : 'Restore all';
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
-  // the labels page only shows, so nothing is picked there
-  pickBar.hidden = page === LABELS_PAGE || page === PLAYBOOK_PAGE || (sel === 0 && exc === 0);
+  // the parts list only shows, so nothing is picked there
+  pickBar.hidden = page === PARTS_PAGE || page === PLAYBOOK_PAGE || (sel === 0 && exc === 0);
   hint.classList.toggle('pushed', !pickBar.hidden);
 }
 
@@ -254,21 +253,18 @@ function update() {
   allNodes = gridHexes.length ? placeAllNodes(hexes, nodes, edges, lattice, gridHexes[0]) : [];
   const present = new Set(allNodes.map((n) => n.key));
   for (const key of [...nodePicks]) if (!present.has(key)) nodePicks.delete(key);
-  const picks = page === PARTS_PAGE ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
-  const labels = page === LABELS_PAGE ? allNodes : null;
-  // the labels page draws the LED channels' data direction, the strip wiring or the touch sensor wiring
-  const topology = labels && wiringView !== 'touch' ? buildWiring(hexes, edges, lattice, allNodes) : null;
-  const wiring = topology && wiringView === 'wiring' ? strandPaths(topology, lattice) : null;
-  const arrows = topology && wiringView === 'channels' ? channelArrows(topology, lattice) : null;
-  const jumps = arrows && channelJumps(topology, lattice);
-  const sensors = labels && wiringView === 'touch' ? sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice) : null;
+  // the touch sensors page picks nodes over their labels and the sensor wiring, which follows what is left out
+  const sensing = page === SENSOR_PAGE;
+  const picks = sensing ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
+  const labels = sensing ? allNodes : null;
+  const sensors = sensing ? sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice) : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, wiring, channelArrows: arrows, channelJumps: jumps, sensors });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, sensors });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
   viewer?.update(lastLayout);
-  viewer?.setWiring(wiring, arrows, sensors);
+  viewer?.setWiring(null, null, sensors);
   focusChain(focusedChain, focusedHex);
   viewer?.setSelected(selectedIds);
   const key = `${W}x${H}`;
@@ -286,6 +282,9 @@ function update() {
   $('total-leds').textContent = s.counts.leds;
   $('tally-nodes').textContent = s.counts.nodes;
   $('tally-leds').textContent = s.counts.leds;
+  const skipped = [...noSensor].filter((k) => present.has(k)).length;
+  $('tally-sensors').textContent = s.counts.nodes - skipped;
+  $('tally-nosensor').textContent = skipped;
   // the board follows the outline, grown so the node bodies sit on it
   const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
@@ -384,7 +383,7 @@ function hexAt(p, { edges = true } = {}) {
   return null;
 }
 
-// the node whose body holds a wall point, on the parts page
+// the node whose body holds a wall point, on the touch sensors page
 function nodeAt(p) {
   if (!p) return null;
   let best = null;
@@ -417,7 +416,7 @@ function toggleSelect(id) {
 }
 
 excludeBtn.addEventListener('click', () => {
-  if (page === PARTS_PAGE) {
+  if (page === SENSOR_PAGE) {
     for (const key of nodePicks) noSensor.add(key);
     nodePicks.clear();
     update();
@@ -434,7 +433,7 @@ clearBtn.addEventListener('click', () => {
   update();
 });
 restoreBtn.addEventListener('click', () => {
-  if (page === PARTS_PAGE) noSensor.clear();
+  if (page === SENSOR_PAGE) noSensor.clear();
   else excluded.clear();
   update();
 });
@@ -529,55 +528,106 @@ function focusWire(target, point) {
   const hexId = wire?.dataset.hex ?? hexAt(point, { edges: false });
   if (chain !== focusedChain || hexId !== focusedHex) focusChain(chain, hexId);
 }
-// the labels page shows the strip wiring or the LED channels' data direction
-let wiringView = 'channels';
-const wiringSwitch = $('wiring-switch');
-function setWiringView(next) {
-  wiringView = next;
-  document.querySelector('.app').dataset.wview = next;
-  for (const b of wiringSwitch.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.wview === next));
-  tip.hidden = true;
-  if (viewer) hint.textContent = hintFor(view);
-  if (lattice) update();
-}
-for (const b of wiringSwitch.querySelectorAll('button')) b.addEventListener('click', () => setWiringView(b.dataset.wview));
-
 // moving from one row to the next swaps the chain straight over; only leaving the key clears it
-for (const key of [$('wiring-key'), $('touch-key')]) {
+for (const key of [$('touch-key')]) {
   for (const row of key.querySelectorAll('[data-chain]')) {
     row.addEventListener('pointerenter', () => row.dataset.chain !== focusedChain && focusChain(row.dataset.chain));
   }
   key.addEventListener('pointerleave', () => focusChain(null));
 }
 
-// --- pages: configure the wall, the parts list, then its connections and wiring ----------------------------
+// --- pages: configure the wall, choose its touch sensors, the parts list; then the assembly guide -------------
 
 const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
-const hintFor = (v) =>
-  page === PARTS_PAGE ? HINTS.parts : page === LABELS_PAGE ? HINTS[wiringView === 'wiring' ? 'labels' : wiringView] : page === PLAYBOOK_PAGE ? '' : HINTS[v];
+const hintFor = (v) => (page === SENSOR_PAGE ? HINTS.sensors : page === PARTS_PAGE ? HINTS.parts : page === PLAYBOOK_PAGE ? '' : HINTS[v]);
+
+// the guide's own page, by id; Back and Next step through it, and Back from its first page returns to the parts list
+let guidePage = GUIDE_PAGES[0].id;
+const guideIndex = () => GUIDE_PAGES.findIndex((p) => p.id === guidePage);
+
+function renderFooter() {
+  if (page === PLAYBOOK_PAGE) {
+    const i = guideIndex();
+    $('page-count').textContent = `Assembly guide · ${i + 1} of ${GUIDE_PAGES.length} · ${GUIDE_PAGES[i].title}`;
+    // a shared guide has nothing before it
+    backBtn.hidden = i === 0 && !!sharedId;
+    nextBtn.hidden = i === GUIDE_PAGES.length - 1;
+    nextBtn.textContent = 'Next';
+    return;
+  }
+  $('page-count').textContent = `Page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
+  backBtn.hidden = page === 1;
+  nextBtn.hidden = false;
+  nextBtn.textContent = page === PAGES.length ? 'Finish' : 'Next';
+}
 
 function setPage(next) {
   page = next;
   app.dataset.page = String(page);
-  $('page-count').textContent = `Page ${page} of ${PAGES.length} · ${PAGES[page - 1]}`;
-  backBtn.hidden = page === 1;
-  nextBtn.hidden = page === PAGES.length;
+  renderFooter();
   // each page picks its own things
   selected.clear();
   nodePicks.clear();
   hover(null);
+  focusChain(null);
   // until the meshes are in, the hint says they are loading
   if (viewer) hint.textContent = hintFor(view);
-  // the connections and wiring page pales the LED channels
+  // the touch sensors page pales the LED channels
   viewer?.setTheme();
   if (lattice) update();
+  if (page === PLAYBOOK_PAGE) setGuidePage(guidePage);
 }
-backBtn.addEventListener('click', () => setPage(page - 1));
-nextBtn.addEventListener('click', () => setPage(page + 1));
 
-// --- the build guide: page 4, or the only page of a shared link -------------------------------------------
+function setGuidePage(id, dir = 0) {
+  guidePage = id;
+  showGuidePage(playbookRoot, id, dir);
+  for (const b of tocList.querySelectorAll('[data-gpage]')) {
+    if (b.dataset.gpage === id) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  }
+  renderFooter();
+}
+
+backBtn.addEventListener('click', () => {
+  if (page !== PLAYBOOK_PAGE) return setPage(page - 1);
+  const i = guideIndex();
+  if (i > 0) setGuidePage(GUIDE_PAGES[i - 1].id, -1);
+  else if (!sharedId) setPage(PARTS_PAGE);
+});
+nextBtn.addEventListener('click', () => {
+  if (page !== PLAYBOOK_PAGE) {
+    if (page === PAGES.length) guidePage = GUIDE_PAGES[0].id;
+    return setPage(page + 1);
+  }
+  const i = guideIndex();
+  if (i < GUIDE_PAGES.length - 1) setGuidePage(GUIDE_PAGES[i + 1].id, 1);
+});
+
+// the guide's table of contents, in the side panel
+const tocList = $('toc');
+tocList.replaceChildren(
+  ...GUIDE_PAGES.map((p, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.gpage = p.id;
+    const n = document.createElement('span');
+    n.className = 'toc-num';
+    n.textContent = i + 1;
+    b.append(n, p.title);
+    b.addEventListener('click', () => {
+      const d = Math.sign(i - guideIndex());
+      setGuidePage(p.id, d);
+    });
+    li.append(b);
+    return li;
+  }),
+);
+$('edit-design').addEventListener('click', () => setPage(1));
+
+// --- the assembly guide: page 4, or the only page of a shared link ----------------------------------------
 
 // A guide's edits to its parts list (changed values, descriptions, links and added rows) are kept in this browser
 // until it is shared; a share stores them with the design on the server, under a new id each time.
@@ -585,8 +635,8 @@ const PLAYBOOK_KEY = 'hexwall-playbook:';
 const playbookRoot = $('playbook');
 let sharedId = null;
 let sharedEdits = null;
-let partView = null;
-let partViewLoading = null;
+// the guide's 3D figures, each loaded with three.js the first time its page is drawn
+const figures = {};
 
 const playbookKey = () => PLAYBOOK_KEY + (sharedId ? `share:${sharedId}` : `design:${active?.saveId ?? active?.name ?? ''}`);
 function loadEdits() {
@@ -607,37 +657,123 @@ function storeEdits(edits) {
   }
 }
 
-// the node layers' 3D view loads with three.js the first time the guide shows
-function mountParts(el) {
-  if (partView) return partView.mount(el);
-  partViewLoading ??= import('./partview.js').then(({ createPartView }) => createPartView(geometry.nodeVisuals));
-  partViewLoading
+const FIGURES = {
+  node: (m) => m.createNodeView(geometry.nodeVisuals),
+  circuits: (m) => m.createCircuitView(['circuits/CentralNode.glb', 'circuits/GeneralNode.glb']),
+  channel: (m) => m.createChannelView(geometry.hexVisuals.find((v) => v.part === 'led_channel')),
+};
+function mount3d(el, kind) {
+  const f = (figures[kind] ??= { view: null, loading: null });
+  if (f.view) return f.view.mount(el);
+  f.loading ??= import('./partview.js').then((m) => FIGURES[kind](m));
+  f.loading
     .then((v) => {
-      partView = v;
+      f.view = v;
       // the guide may have been redrawn while it loaded; the newest box gets it
-      const box = playbookRoot.querySelector('.pb-parts');
+      const box = playbookRoot.querySelector(`.pb-3d[data-3d="${kind}"]`);
       if (box) v.mount(box);
     })
-    .catch((err) => (el.textContent = `Could not load the 3D parts (${err.message}).`));
+    .catch((err) => (el.textContent = `Could not load the 3D model (${err.message}).`));
 }
 
-async function shareGuide(edits) {
-  const res = await fetch('api/share', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: active?.name ?? 'Hexagon wall', snapshot: snapshot(), playbook: edits }),
-  });
+// A share stores the design and the guide's edits on the server under a new id. Sharing the same thing twice gives
+// back the same link, so downloading the book again does not mint another.
+let lastShare = null;
+async function shareGuide() {
+  const edits = loadEdits();
+  const body = JSON.stringify({ name: active?.name ?? 'Hexagon wall', snapshot: snapshot(), playbook: edits });
+  if (lastShare?.body === body) return lastShare.url;
+  const res = await fetch('api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
   if (!res.ok) throw new Error(res.status === 404 || res.status === 405 ? 'this server cannot store shares' : `the server said ${res.status}`);
   const { id } = await res.json();
   // the new link starts from what was shared, so its own edits are kept apart from this guide's
   try {
     localStorage.setItem(`${PLAYBOOK_KEY}share:${id}`, JSON.stringify(edits));
   } catch {}
-  return new URL(`?s=${id}`, new URL('.', location.href)).href;
+  const url = new URL(`?s=${id}`, new URL('.', location.href)).href;
+  lastShare = { body, url };
+  return url;
 }
+
+// a shared guide's own link is the one it was opened by
+const guideLink = () => (sharedId ? Promise.resolve(new URL(`?s=${sharedId}`, new URL('.', location.href)).href) : shareGuide());
+
+const shareOut = $('share-out');
+$('share-btn').addEventListener('click', async () => {
+  shareOut.hidden = false;
+  shareOut.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Saving…' }));
+  try {
+    const url = await guideLink();
+    const input = Object.assign(document.createElement('input'), { className: 'url', value: url, readOnly: true });
+    input.setAttribute('aria-label', 'Share link');
+    input.addEventListener('focus', () => input.select());
+    const copy = Object.assign(document.createElement('button'), { type: 'button', className: 'btn', textContent: 'Copy' });
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        copy.textContent = 'Copied';
+      } catch {
+        input.select();
+      }
+    });
+    const note = Object.assign(document.createElement('span'), { textContent: 'Anyone with this link can open and edit this guide:' });
+    shareOut.replaceChildren(note, input, copy);
+  } catch (err) {
+    shareOut.replaceChildren(Object.assign(document.createElement('span'), { className: 'err', textContent: `Could not share: ${err.message}` }));
+  }
+});
+
+// The whole book as a PDF, by the browser's print to PDF: every sheet on its own pages, the 3D figures as stills,
+// every node's switches spelt out, and the guide's share link at the head of the first page.
+$('pdf-btn').addEventListener('click', async () => {
+  const btn = $('pdf-btn');
+  btn.disabled = true;
+  let link = '';
+  try {
+    link = await guideLink();
+  } catch {
+    // printed without a link when the server cannot store shares
+  }
+  btn.disabled = false;
+  const head = playbookRoot.querySelector('.print-head');
+  if (head) {
+    head.replaceChildren();
+    const title = Object.assign(document.createElement('b'), { textContent: `${active?.name ?? 'Hexagon wall'} · assembly guide` });
+    const when = Object.assign(document.createElement('span'), { textContent: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) });
+    head.append(title, when);
+    if (link) {
+      const a = Object.assign(document.createElement('a'), { href: link, textContent: link });
+      const p = Object.assign(document.createElement('span'), { className: 'link', textContent: 'Open it online, with every drawing to explore: ' });
+      p.append(a);
+      head.append(p);
+    }
+  }
+  // every sheet laid out, so the figures have a size to be photographed at
+  document.body.classList.add('print-book');
+  const stills = [];
+  for (const box of playbookRoot.querySelectorAll('.pb-3d')) {
+    const url = figures[box.dataset['3d']]?.view && box.querySelector('canvas') ? figures[box.dataset['3d']].view.still() : null;
+    if (!url) continue;
+    const img = Object.assign(document.createElement('img'), { className: 'print-still', src: url, alt: '' });
+    box.append(img);
+    stills.push(img);
+  }
+  // a figure whose canvas sits in another box (not drawn yet) is left out of print rather than shown empty
+  const open = [...playbookRoot.querySelectorAll('details:not([open])')];
+  for (const d of open) d.open = true;
+  await Promise.all(stills.map((img) => img.decode().catch(() => {})));
+  const title = document.title;
+  document.title = `${active?.name ?? 'Hexagon wall'} assembly guide`;
+  window.print();
+  document.title = title;
+  document.body.classList.remove('print-book');
+  for (const img of stills) img.remove();
+  for (const d of open) d.open = false;
+});
 
 function showPlaybook(s, hexes, edges) {
   const topology = buildWiring(hexes, edges, lattice, allNodes);
+  const present = new Set(allNodes.map((n) => n.key));
   renderPlaybook(playbookRoot, {
     name: active?.name ?? 'Hexagon wall',
     shared: !!sharedId,
@@ -645,19 +781,26 @@ function showPlaybook(s, hexes, edges) {
     allNodes,
     topology,
     arrows: channelArrows(topology, lattice),
+    jumps: channelJumps(topology, lattice),
+    wiring: strandPaths(topology, lattice),
+    sensors: sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice),
+    switches: switchSettings(topology),
+    sensorsLeftOut: [...noSensor].filter((k) => present.has(k)).length,
     counts: s.counts,
     bom: lastBom,
     edits: loadEdits(),
     onEdits: storeEdits,
     exportExcel: (bom) => downloadBom(bom),
-    share: shareGuide,
-    mountParts,
+    mount3d,
+    go: (id) => setGuidePage(id, Math.sign(GUIDE_PAGES.findIndex((p) => p.id === id) - guideIndex())),
     // the drawings are stills of the same meshes the other pages show, once they have loaded
     snapshot: viewer ? (box, width, opts) => viewer.snapshot(box, width, opts) : null,
     rupees,
     formatLength,
     constants: lastBom.constants,
   });
+  // the guide is drawn anew; the page being read stays open
+  showGuidePage(playbookRoot, guidePage);
 }
 
 // --- tabs: each one an open design, like browser tabs; saves keep them in this browser -------
@@ -1086,7 +1229,7 @@ svg.addEventListener('pointerup', () => {
   if (!was || was.moved) return;
   // pointer capture retargets events to the svg, so use the element pressed on
   if (page !== 1) {
-    const key = page === PARTS_PAGE && nodeAt(was.point);
+    const key = page === SENSOR_PAGE && nodeAt(was.point);
     if (key) togglePick(key);
     return;
   }
@@ -1119,7 +1262,7 @@ svg.addEventListener('pointermove', (e) => {
     return;
   }
   hover(page !== 1 ? null : hexAt(wallFromSvg(e), { edges: false }));
-  if (page === LABELS_PAGE) focusWire(e.target, wallFromSvg(e));
+  if (page === SENSOR_PAGE) focusWire(e.target, wallFromSvg(e));
   const target = e.target.closest('[data-tip]');
   if (!target) {
     tip.hidden = true;
@@ -1155,7 +1298,7 @@ function wire3d(canvas) {
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_SLOP) return;
     const point = viewer.wallPoint(e.clientX, e.clientY);
     if (page !== 1) {
-      const key = page === PARTS_PAGE && nodeAt(point);
+      const key = page === SENSOR_PAGE && nodeAt(point);
       if (key) togglePick(key);
       return;
     }
@@ -1188,7 +1331,7 @@ async function startViewer() {
 initSections();
 initTheme(() => {
   viewer?.setTheme();
-  partView?.setTheme();
+  for (const f of Object.values(figures)) f.view?.setTheme();
   // the guide's drawings are stills, so they are taken again in the new colours
   if (page === PLAYBOOK_PAGE && lattice) update();
 });
