@@ -818,49 +818,65 @@ function bomSheet(ctx) {
   );
 }
 
-// the parts list as a plain table, for print: wide name and description columns, and every shop a link
-function bomTable(ctx, merged, { pad = false } = {}) {
+// the parts list for print: each section under its own bold title, with a table of its own, and the total at the end
+function bomTable(ctx, merged) {
   const money = (v) => (v == null ? '' : ctx.rupees(v));
   const cell = (tag, kids, cls) => h(tag, cls ? { class: cls } : {}, kids ?? '');
-  const rows = [];
+  const widths = ['24%', '33%', '6%', '10%', '10%', '17%'];
+  const head = () => h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : ''))));
+  const out = [];
   for (const sec of merged.sections) {
     if (!sec.items.length) continue;
-    rows.push(h('tr', { class: 'sec' }, h('td', { colspan: '4' }, sec.title), cell('td', money(sum(sec.items)), 'n'), cell('td', '')));
-    for (const i of sec.items) {
-      rows.push(
+    const rows = sec.items.map((i) =>
+      h(
+        'tr',
+        {},
+        cell('td', [itemName(i), i.note ? h('small', {}, i.note) : null], 'item'),
+        cell('td', linked(i.desc)),
+        cell('td', i.qty ?? '', 'n'),
+        cell('td', money(i.rate), 'n'),
+        cell('td', money(cost(i)), 'n'),
+        cell('td', linked(i.link)),
+      ),
+    );
+    out.push(
+      h(
+        'section',
+        { class: 'print-sec' },
+        h('h2', {}, h('span', {}, sec.title), h('span', { class: 'n' }, money(sum(sec.items)))),
         h(
-          'tr',
-          {},
-          cell('td', [itemName(i), i.note ? h('small', {}, i.note) : null], 'item'),
-          cell('td', linked(i.desc)),
-          cell('td', i.qty ?? '', 'n'),
-          cell('td', money(i.rate), 'n'),
-          cell('td', money(cost(i)), 'n'),
-          cell('td', linked(i.link)),
+          'table',
+          { class: 'print-table' },
+          h('colgroup', {}, widths.map((w) => h('col', { style: `width:${w}` }))),
+          head(),
+          h('tbody', {}, rows),
+          h('tfoot', {}, h('tr', { class: 'subtotal' }, h('td', { colspan: '4' }, `${sec.title} total`), cell('td', money(sum(sec.items)), 'n'), cell('td', ''))),
         ),
-      );
-    }
+      ),
+    );
   }
-  rows.push(h('tr', { class: 'total' }, h('td', { colspan: '4' }, 'Total'), cell('td', money(sum(merged.sections.flatMap((s) => s.items))), 'n'), cell('td', '')));
-  const widths = ['24%', '33%', '6%', '10%', '10%', '17%'];
-  return h(
-    'table',
-    { class: 'print-table' },
-    h('colgroup', {}, widths.map((w) => h('col', { style: `width:${w}` }))),
-    // on its own PDF, an empty row at the head and foot of every page stands in for the page margin
-    h('thead', {}, pad ? h('tr', { class: 'pad' }, h('td', { colspan: '6' })) : null, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))),
-    h('tbody', {}, rows),
-    pad ? h('tfoot', {}, h('tr', { class: 'pad' }, h('td', { colspan: '6' }))) : null,
-  );
+  out.push(h('p', { class: 'print-total' }, h('span', {}, 'Total'), h('span', {}, money(sum(merged.sections.flatMap((s) => s.items))))));
+  return h('div', { class: 'print-bom-list' }, out);
 }
 
 // the parts list's own PDF is the browser's print to PDF of the plain table, and nothing else on the page
 function printBom(ctx, merged) {
   const host = document.getElementById('pb-print');
+  // the page itself has no margin, so the browser adds no header or footer of its own; an outer table's empty head
+  // and foot rows, which repeat on every page, make the top and bottom margins instead
+  const pad = () => h('tr', { class: 'pad' }, h('td'));
   host.replaceChildren(
-    h('h1', {}, `${ctx.name} · parts list`),
-    h('p', {}, new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })),
-    bomTable(ctx, merged, { pad: true }),
+    h(
+      'table',
+      { class: 'print-frame' },
+      h('thead', {}, pad()),
+      h('tbody', {}, h('tr', {}, h('td', {},
+        h('h1', {}, `${ctx.name} · parts list`),
+        h('p', {}, new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })),
+        bomTable(ctx, merged),
+      ))),
+      h('tfoot', {}, pad()),
+    ),
   );
   const title = document.title;
   document.title = `${ctx.name} parts`;
