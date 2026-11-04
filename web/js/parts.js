@@ -2,7 +2,8 @@
 // cells as plain JSON; this module turns them into the list for a wall. The server also uses it to check the sheet
 // before it serves it, so a typo shows up straight away rather than on some later wall.
 //
-// The Parts sheet has one row per item: Item, Section, Price, Qty, Per, Vendor, Description. Qty is counted Per
+// The Parts sheet has one row per item: Item, Section, Price, Qty, Per, Vendor, Description, and an optional Total:
+// what the row's Qty costs altogether, given instead of a Price (the price of one is then Total / Qty). Qty is counted Per
 // something on the wall (PER), and the total is rounded up: 3 per node, or 1 per 7 LED channels. With no Per, Qty
 // is for the whole wall. An item that comes to 0 (the backboard, when it is off) is left off the list.
 //
@@ -226,8 +227,8 @@ export function partsFromSheets(sheets) {
   const pc = columns(
     partRows,
     'Parts',
-    { label: 'item', section: 'section', price: 'price', qty: 'qty', per: 'per', vendor: 'vendor', desc: 'description' },
-    ['per', 'vendor', 'desc'],
+    { label: 'item', section: 'section', price: 'price', total: 'total', qty: 'qty', per: 'per', vendor: 'vendor', desc: 'description' },
+    ['per', 'vendor', 'desc', 'total'],
   );
   const items = [];
   const seen = new Map();
@@ -236,8 +237,16 @@ export function partsFromSheets(sheets) {
     const cell = (k) => (pc[k] >= 0 ? row[pc[k]] ?? null : null);
     const label = text(cell('label'));
     if (!label) return;
-    const price = numberOf(cell('price'));
+    let price = numberOf(cell('price'));
     const qty = numberOf(cell('qty'));
+    // a Total is what the row's Qty costs altogether; the price of one is worked out from it
+    const total = numberOf(cell('total'));
+    if (Number.isNaN(total)) errors.push(`${ref('Parts', r, pc.total)}: the Total of ${label} should be a number, or blank`);
+    else if (total != null) {
+      if (price != null) errors.push(`${ref('Parts', r, pc.total)}: ${label} has both a Price and a Total; keep one`);
+      else if (!(qty > 0)) errors.push(`${ref('Parts', r, pc.total)}: ${label} needs a Qty for its Total to be shared out`);
+      else price = total / qty;
+    }
     if (Number.isNaN(price)) errors.push(`${ref('Parts', r, pc.price)}: the price of ${label} should be a number, or blank if not known yet`);
     if (Number.isNaN(qty) || qty < 0) errors.push(`${ref('Parts', r, pc.qty)}: the Qty of ${label} should be a number, or blank if not known yet`);
     const per = text(cell('per'));

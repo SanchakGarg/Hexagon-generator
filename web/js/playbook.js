@@ -560,7 +560,9 @@ export function mergeBom(bom, edits) {
   if (!sections.some((s) => s.title === CUSTOM_SECTION)) sections.push({ title: CUSTOM_SECTION, note: 'your own additions', items: [] });
   for (const c of edits.custom ?? []) {
     const sec = sections.find((s) => s.title === c.section) ?? sections.at(-1);
-    sec.items.push({ key: c.id, custom: true, label: c.label ?? '', qty: c.qty ?? null, rate: c.rate ?? null, desc: c.desc ?? '', link: c.link ?? '' });
+    const total = c.total ?? null;
+    const rate = total != null ? (c.qty ? total / c.qty : null) : c.rate ?? null;
+    sec.items.push({ key: c.id, custom: true, label: c.label ?? '', qty: c.qty ?? null, rate, total, desc: c.desc ?? '', link: c.link ?? '' });
   }
   return { sections, inputs: bom.inputs };
 }
@@ -573,13 +575,18 @@ function applyEdit(item, e = {}) {
     if (e.qty !== item.qty) delete out.f;
   }
   if ('rate' in e) out.rate = e.rate;
+  // a final cost typed for the item: the price of one follows from it
+  if ('total' in e) {
+    out.total = e.total;
+    out.rate = e.total != null && out.qty ? e.total / out.qty : null;
+  }
   if ('desc' in e) out.desc = e.desc;
   if ('link' in e) out.link = e.link;
   out.edited = Object.keys(e).length > 0;
   return out;
 }
 
-const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
+const cost = (i) => (i.total != null ? i.total : i.qty != null && i.rate != null ? i.qty * i.rate : null);
 const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
 const num = (v) => (v === '' || v == null || !Number.isFinite(+v) ? null : +v);
 
@@ -697,13 +704,20 @@ function bomSheet(ctx) {
       label = h('span', { class: 'label' }, item.label, item.note ? h('small', {}, item.note) : null);
       tools = h('button', { type: 'button', class: 'mini', title: 'Back to the worked-out values', 'aria-label': 'Reset this row', onclick: () => (delete edits.overrides[item.key], save()) }, '↺');
     }
+    // a price each and a final cost are two ways of pricing the item: typing one drops the other
+    const other = { rate: 'total', total: 'rate' };
     const set = (k, v) => {
       if (item.custom) {
-        edits.custom.find((x) => x.id === item.key)[k] = v;
+        const c = edits.custom.find((x) => x.id === item.key);
+        c[k] = v;
+        if (other[k]) c[other[k]] = null;
       } else {
         const o = (edits.overrides[item.key] ??= {});
+        if (other[k]) delete o[other[k]];
         // back to what was worked out: no longer an edit
         if ((k === 'qty' || k === 'rate') && v === (item.base?.[k] ?? null)) delete o[k];
+        // an emptied final cost goes back to pricing by the piece
+        else if (k === 'total' && v == null) delete o[k];
         else if ((k === 'desc' || k === 'link') && v === (item.base?.[k] ?? '')) delete o[k];
         else o[k] = v;
         if (!Object.keys(o).length) delete edits.overrides[item.key];
@@ -736,10 +750,19 @@ function bomSheet(ctx) {
         }
         const { label, tools, set } = editRow(item);
         let rowEl = null;
+        // the price each and the final cost follow each other as either is typed
+        const money2 = (v) => (v == null ? '' : String(+v.toFixed(2)));
+        const rateIn = field('rate', money2(item.rate), { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Price each of ${item.label || 'item'}`, title: 'Price of one' }, (v) => set('rate', num(v)));
+        const totalIn = field('total', money2(cost(item)), { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Final cost of ${item.label || 'item'}`, title: 'Or type the final cost of all of them' }, (v) => set('total', num(v)));
+        rows.push(() => {
+          const i = cur();
+          if (document.activeElement !== rateIn) rateIn.value = money2(i.rate);
+          if (document.activeElement !== totalIn) totalIn.value = money2(cost(i));
+        });
         rows.push(() => {
           if (!rowEl || item.custom) return;
           const o = edits.overrides[item.key] ?? {};
-          for (const k of ['desc', 'qty', 'rate', 'link']) rowEl.querySelector(`input.${k}`)?.classList.toggle('edited', k in o);
+          for (const k of ['desc', 'qty', 'rate', 'total', 'link']) rowEl.querySelector(`input.${k}`)?.classList.toggle('edited', k in o);
           tools.hidden = !Object.keys(o).length;
         });
         out.push(
@@ -749,8 +772,8 @@ function bomSheet(ctx) {
             label,
             field('desc', item.desc, { placeholder: 'description', 'aria-label': `Description of ${item.label || 'item'}` }, (v) => set('desc', v)),
             field('qty', item.qty, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Quantity of ${item.label || 'item'}` }, (v) => set('qty', num(v))),
-            field('rate', item.rate, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Price each of ${item.label || 'item'}` }, (v) => set('rate', num(v))),
-            amountEl,
+            rateIn,
+            totalIn,
             field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Vendor for ${item.label || 'item'}` }, (v) => set('link', v.trim())),
             tools,
           )),
@@ -783,7 +806,7 @@ function bomSheet(ctx) {
     h(
       'div',
       { class: 'pb-bom-head' },
-      h('p', {}, 'Everything to buy for this wall, section by section in the order you build it. An item’s name links to where to buy it. Edit changes any quantity, price, description or vendor, or adds your own items; your changes stay in this browser until you share the guide.'),
+      h('p', {}, 'Everything to buy for this wall, section by section in the order you build it. An item’s name links to where to buy it. Edit changes any quantity, price, description or vendor, or adds your own items. Price an item by the piece, or type its final cost in the Amount column and the price each follows. Your changes stay in this browser until you share the guide.'),
       h('div', { class: 'pb-tools no-print' }, editBtn, exportMenu([
         ['Excel (.xlsx)', 'Every quantity as a formula you can edit', () => ctx.exportExcel(mergeBom(ctx.bom, edits))],
         ['PDF', 'A printable table with clickable shop links', () => printBom(ctx, mergeBom(ctx.bom, edits))],

@@ -1709,7 +1709,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .pb-row input::placeholder { color: var(--muted); opacity: 0.5; }
 .pb-row input:hover { border-bottom-color: var(--muted); }
 .pb-row input:focus { outline: none; border-bottom: 1.5px solid var(--accent); background: color-mix(in srgb, var(--butter) 35%, transparent); }
-.pb-row input.qty, .pb-row input.rate { text-align: right; font-variant-numeric: tabular-nums; }
+.pb-row input.qty, .pb-row input.rate, .pb-row input.total { text-align: right; font-variant-numeric: tabular-nums; }
+.pb-row input.total { color: var(--accent); }
 .pb-row input.edited { background: color-mix(in srgb, var(--butter) 55%, transparent); }
 .pb-row input.label { font-size: 1.12rem; }
 .pb-row .linkcell { display: flex; align-items: center; gap: 4px; min-width: 0; }
