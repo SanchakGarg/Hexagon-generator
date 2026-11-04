@@ -819,7 +819,7 @@ function bomSheet(ctx) {
 }
 
 // the parts list as a plain table, for print: wide name and description columns, and every shop a link
-function bomTable(ctx, merged) {
+function bomTable(ctx, merged, { pad = false } = {}) {
   const money = (v) => (v == null ? '' : ctx.rupees(v));
   const cell = (tag, kids, cls) => h(tag, cls ? { class: cls } : {}, kids ?? '');
   const rows = [];
@@ -847,8 +847,10 @@ function bomTable(ctx, merged) {
     'table',
     { class: 'print-table' },
     h('colgroup', {}, widths.map((w) => h('col', { style: `width:${w}` }))),
-    h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))),
+    // on its own PDF, an empty row at the head and foot of every page stands in for the page margin
+    h('thead', {}, pad ? h('tr', { class: 'pad' }, h('td', { colspan: '6' })) : null, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))),
     h('tbody', {}, rows),
+    pad ? h('tfoot', {}, h('tr', { class: 'pad' }, h('td', { colspan: '6' }))) : null,
   );
 }
 
@@ -857,8 +859,8 @@ function printBom(ctx, merged) {
   const host = document.getElementById('pb-print');
   host.replaceChildren(
     h('h1', {}, `${ctx.name} · parts list`),
-    h('p', {}, `${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · prices in rupees`),
-    bomTable(ctx, merged),
+    h('p', {}, new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })),
+    bomTable(ctx, merged, { pad: true }),
   );
   const title = document.title;
   document.title = `${ctx.name} parts`;
