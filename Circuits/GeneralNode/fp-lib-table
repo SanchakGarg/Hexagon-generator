@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "XT30UPB-M") (type "KiCad") (uri "/Users/sanchakgarg/Documents/KiCad/Custom Components/XT30UPB-M/XT30UPB-M.pretty") (options "") (descr ""))
+)
