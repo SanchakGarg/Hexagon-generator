@@ -813,6 +813,12 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   vector-effect: non-scaling-stroke;
 }
 
+.board-rim { fill: color-mix(in srgb, var(--c-board) 45%, transparent); stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.sheet-cell { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 9 6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.sheet-num { fill: var(--accent); font-family: var(--hand); paint-order: stroke; stroke: var(--page); stroke-width: 4px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.app[data-page="3"] .hex text { opacity: 0.35; }
+#sheet-sum .line.big b { font-size: 1.6rem; }
+.presets { margin-bottom: 10px; }
 .flat .wall { fill: color-mix(in srgb, var(--c-board) 50%, transparent); stroke: var(--ink); }
 
 .dim line,
@@ -1097,7 +1103,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .app:not([data-page="2"]) [data-page-only="2"],
 .app:not([data-page="3"]) [data-page-only="3"],
 .app:not([data-page="4"]) [data-page-only="4"],
-.app[data-page="4"] [data-page-not="4"] { display: none; }
+.app:not([data-page="5"]) [data-page-only="5"],
+.app[data-page="5"] [data-page-not="5"] { display: none; }
 
 .card.totals { display: flex; flex-direction: column; max-height: calc(100% - 90px); pointer-events: auto; }
 /* scrolls by wheel, touch or keys, with no bar drawn */
@@ -1105,7 +1112,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .totals-scroll::-webkit-scrollbar { display: none; }
 .bom { min-width: 0; margin-top: 4px; }
 /* the parts list card stays narrow so the wall behind it stays in view; descriptions wrap beneath each item */
-.app[data-page="3"] .card.totals { width: min(360px, 40%); }
+.app[data-page="4"] .card.totals { width: min(360px, 40%); }
 .bom .line small.desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bom-head { display: flex; align-items: baseline; gap: 10px; }
 .bom-head .for { color: var(--muted); font-size: 1.1rem; }
@@ -1134,7 +1141,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   display: grid;
   /* the item column gives way first on a narrow screen, so prices never run out of the card */
   grid-template-columns: minmax(0, 1fr) 3.2em minmax(5.6em, max-content);
-  gap: 10px;
+  gap: 2px 14px;
   font-size: 1.1rem;
   line-height: 1.2;
   padding-block: 4px 3px;
@@ -1290,7 +1297,7 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 
 /* --- page 4: the assembly guide, a book of sheets read one at a time ----------------------------------------- */
 
-.app[data-page="4"] .viewport { display: none; }
+.app[data-page="5"] .viewport { display: none; }
 /* a shared link is only its guide */
 .app[data-shared] .tabs,
 .app[data-shared] #edit-design { display: none; }
@@ -1644,6 +1651,24 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .cd-note.small { font-size: 16px; fill: var(--muted); }
 .cd-note.free { fill: var(--w-l3); }
 
+/* the parts list: its intro, with Edit and Export at the top right */
+.pb-bom-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap-reverse; margin-bottom: 10px; }
+.pb-bom-head > p { flex: 1 1 320px; margin: 0; }
+.pb-tools { display: flex; gap: 10px; margin-left: auto; }
+.btn.tool { display: inline-flex; align-items: center; gap: 6px; }
+.btn.tool .ico { display: inline-flex; width: 1.05em; height: 1.05em; }
+.btn.tool .ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.btn.tool .caret { width: 0.9em; margin-left: -2px; transition: rotate 0.15s; }
+.pb-menu { position: relative; }
+.pb-menu > summary { list-style: none; cursor: pointer; }
+.pb-menu > summary::-webkit-details-marker { display: none; }
+.pb-menu > summary::after { display: none; }
+.pb-menu[open] .caret { rotate: 180deg; }
+.pb-menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 230px; display: grid; padding: 6px; background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; box-shadow: 3px 4px 0 color-mix(in srgb, var(--ink) 25%, transparent); }
+.pb-menu-list button { display: grid; text-align: left; gap: 1px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: 1.1rem var(--hand); cursor: pointer; }
+.pb-menu-list button small { color: var(--muted); font-size: 0.85rem; }
+.pb-menu-list button:hover, .pb-menu-list button:focus-visible { background: color-mix(in srgb, var(--sky) 45%, transparent); outline: none; }
+
 /* the parts list, editable */
 .pb-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
 .pb-share-out { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; font-size: 1.1rem; }
@@ -1652,16 +1677,20 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .pb-bom { overflow-x: auto; }
 .pb-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.3fr) minmax(130px, 1.2fr) 70px 90px 100px minmax(140px, 1.2fr) 28px;
-  gap: 8px;
+  grid-template-columns: minmax(150px, 1.25fr) minmax(170px, 1.7fr) 40px 74px 86px minmax(130px, 1.05fr) 20px;
+  gap: 8px 16px;
   align-items: center;
-  min-width: 860px;
-  padding: 4px 2px;
+  min-width: 820px;
+  padding: 5px 4px;
   border-bottom: 1.5px solid var(--rule);
   font-size: 1.12rem;
 }
 .pb-row.cols { color: var(--muted); font-size: 1rem; border-bottom-color: var(--line); }
-.pb-row.section { margin-top: 10px; font-size: 1.35rem; }
+.pb-row.section { margin-top: 14px; font-size: 1.35rem; }
+/* the handwriting face has one weight, so headings are thickened with a stroke of their own colour */
+.pb-row.section .sec-title, .pb-row.section .amount, .bom .section > span:first-child, .bom .section b { font-weight: 700; -webkit-text-stroke: 0.7px currentColor; }
+.pb-row.section .sec-title small, .bom .section small { -webkit-text-stroke: 0; }
+.pb-row.section .sec-title small, .bom .section small { font-weight: 400; }
 .pb-row.section small, .pb-row .label small, .pb-row.grand small { display: block; font-size: 0.85rem; color: var(--muted); line-height: 1.2; }
 .pb-row.item { padding-left: 14px; }
 .pb-row .amount { text-align: right; font-weight: 400; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -1724,10 +1753,10 @@ body.print-book .playbook > .sheet { display: block !important; }
   .print-table td.item { font-weight: 500; }
   .print-table td.item small { display: block; font-weight: 400; font-size: 8.5pt; color: #666; }
   .print-table a { color: #0645ad; text-decoration: underline; }
-  .print-table th, .print-table td { border: 0.5pt solid #999; padding: 3pt 5pt; text-align: left; vertical-align: top; word-break: break-word; }
+  .print-table th, .print-table td { border: 0.5pt solid #999; padding: 4pt 7pt; text-align: left; vertical-align: top; word-break: break-word; }
   .print-table th { background: #eee; }
   .print-table .n { text-align: right; white-space: nowrap; }
-  .print-table tr.sec td { font-weight: 600; background: #f6f6f6; }
+  .print-table tr.sec td { font-weight: 700; font-size: 10.5pt; background: #f0f0f0; padding-top: 6pt; }
   .print-table tr.total td { font-weight: 700; border-top: 1.5pt solid #000; }
 
   /* the whole book: each sheet on its own pages, in the light theme's colours */
@@ -1764,7 +1793,7 @@ body.print-book .playbook > .sheet { display: block !important; }
 }
 
 @media (max-width: 760px) {
-  .app[data-page="4"] .stage { order: 0; }
+  .app[data-page="5"] .stage { order: 0; }
   .playbook { padding: 12px 0 30px 22px; overflow: visible; }
   .sheet { padding: 18px 16px 22px; }
   .sheet-title { font-size: 1.7rem; }
@@ -1799,7 +1828,7 @@ body.print-book .playbook > .sheet { display: block !important; }
   /* keeps clear of the spiral binding down the drawing's left edge */
   .card.totals { right: 10px; bottom: 10px; min-width: 0; max-width: calc(100% - 44px); max-height: calc(100% - 64px); padding: 8px 12px 6px; }
   .bom { min-width: 0; }
-  .app[data-page="3"] .card.totals { width: auto; }
+  .app[data-page="4"] .card.totals { width: auto; }
   .labels-key { width: auto; max-width: 280px; }
   .line { font-size: 1.05rem; line-height: 24px; }
   .stage::before { top: 50px; }

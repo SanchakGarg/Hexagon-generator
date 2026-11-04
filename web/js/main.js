@@ -6,6 +6,7 @@ import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
 import { renderPlaybook, showGuidePage, GUIDE_PAGES } from './playbook.js';
 import { buildBom, isUrl, vendorName } from './parts.js';
+import { planSheets, sheetsDxf } from './sheets.js';
 
 const UNITS = { mm: 0.001, m: 1, in: 0.0254 };
 const DECIMALS = { mm: 0, m: 3, in: 1 };
@@ -14,12 +15,16 @@ const HINTS = {
   '3d': 'Hover to lift · click to select · drag to orbit · scroll to zoom · right-drag to pan',
   sensors: 'Click nodes to pick them · hover a sensor wire for its route · scroll to zoom · drag to pan · double-click to reset',
   parts: 'Scroll to zoom · drag to pan · double-click to reset',
+  sheets: 'Each dashed box is one sheet, numbered as in the DXF · scroll to zoom · drag to pan · double-click to reset',
 };
 // the configurator's pages; Finish on the last one opens the assembly guide
-const PAGES = ['Configure', 'Touch sensors', 'Parts list'];
+const PAGES = ['Configure', 'Touch sensors', 'Backboard sheets', 'Parts list'];
 const SENSOR_PAGE = 2;
-const PARTS_PAGE = 3;
-const PLAYBOOK_PAGE = 4;
+const SHEETS_PAGE = 3;
+const PARTS_PAGE = 4;
+const PLAYBOOK_PAGE = 5;
+// a backboard sheet as sold: 4 × 5 ft unless changed
+const FT = 0.3048;
 // the parts list, its prices and the build constants come from parts.xlsx, which the server reads as it starts
 let partsDef = null;
 const rupees = (n) => {
@@ -36,6 +41,8 @@ const widthIn = $('wall-width');
 const heightIn = $('wall-height');
 const thicknessIn = $('board-thickness');
 const raiseIn = $('board-raise');
+const sheetWIn = $('sheet-w');
+const sheetHIn = $('sheet-h');
 const unitButtons = [...document.querySelectorAll('#units [data-unit]')];
 const viewport = $('viewport');
 const svg = $('stage-svg');
@@ -111,14 +118,85 @@ function renderPicks() {
   for (const el of [$('pick-selected'), excludeBtn, clearBtn]) el.hidden = sel === 0;
   for (const el of [$('pick-excluded'), restoreBtn]) el.hidden = exc === 0;
   // the parts list only shows, so nothing is picked there
-  pickBar.hidden = page === PARTS_PAGE || page === PLAYBOOK_PAGE || (sel === 0 && exc === 0);
+  pickBar.hidden = page === SHEETS_PAGE || page === PARTS_PAGE || page === PLAYBOOK_PAGE || (sel === 0 && exc === 0);
   hint.classList.toggle('pushed', !pickBar.hidden);
 }
+
+// --- page 3: the backboard cut from stock sheets ----------------------------------------------------------------
+let lastPlan = null;
+const inUnit = (m) => String(+(m / UNITS[unit]).toFixed(Math.max(DECIMALS[unit], unit === 'm' ? 4 : 0)));
+// a sheet's size in feet when it is a whole number of them, else in the design's unit
+function sheetSize({ sheetW, sheetH }) {
+  const ft = (m) => m / FT;
+  const whole = (m) => Math.abs(ft(m) - Math.round(ft(m))) < 0.01;
+  return whole(sheetW) && whole(sheetH) ? `${Math.round(ft(sheetW))} × ${Math.round(ft(sheetH))} ft` : `${formatLength(sheetW)} × ${formatLength(sheetH)}`;
+}
+function renderSheets(rim, sheetW, sheetH) {
+  const note = $('sheet-note');
+  const sum = $('sheet-sum');
+  const dxf = $('dxf-btn');
+  const plan = lastPlan;
+  for (const b of document.querySelectorAll('#sheet-presets [data-ft]')) {
+    const [w, h] = b.dataset.ft.split('x').map((v) => +v * FT);
+    const on = Math.abs(w - sheetW) < 1e-3 && Math.abs(h - sheetH) < 1e-3;
+    b.setAttribute('aria-pressed', String(on));
+  }
+  dxf.disabled = !plan;
+  if (!boardOn) {
+    note.textContent = 'The backboard is off (page 1), so there is nothing to cut.';
+    sum.replaceChildren();
+    return;
+  }
+  if (!(sheetW > 0 && sheetH > 0)) {
+    note.textContent = 'Enter a sheet width and height greater than zero.';
+    sum.replaceChildren();
+    return;
+  }
+  note.textContent = '';
+  if (!plan) return sum.replaceChildren();
+  const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
+  const used = plan.boardArea / (plan.count * sheetW * sheetH);
+  const row = (label, value, big) => {
+    const p = document.createElement('p');
+    p.className = `line${big ? ' big' : ''}`;
+    const a = document.createElement('span');
+    a.textContent = label;
+    const b = document.createElement('b');
+    b.textContent = value;
+    p.append(a, b);
+    return p;
+  };
+  sum.replaceChildren(
+    row('Sheets needed', plan.count, true),
+    row('Sheet', sheetSize(plan)),
+    row('Board', `${formatLength(span('x'))} × ${formatLength(span('z'))}`),
+    row('Laid out', `${plan.cols} × ${plan.rows}, ${plan.turned ? 'turned' : 'upright'}`),
+    row('Material used', `${Math.round(used * 100)}%`),
+  );
+}
+for (const b of document.querySelectorAll('#sheet-presets [data-ft]')) {
+  b.addEventListener('click', () => {
+    const [w, h] = b.dataset.ft.split('x').map((v) => +v * FT);
+    sheetWIn.value = inUnit(w);
+    sheetHIn.value = inUnit(h);
+    update();
+  });
+}
+$('dxf-btn').addEventListener('click', () => {
+  if (!lastPlan) return;
+  const name = active?.name || 'Hexagon wall';
+  const blob = new Blob([sheetsDxf(lastPlan, { title: name })], { type: 'application/dxf' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name.replace(/[\\/:*?"<>|]+/g, '-')} backboard sheets (mm).dxf`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 // what to buy for the wall as it stands, grouped like a shopping list: each section with its own items, prices in
 // rupees, and a grand total at the end. Items without a price yet show -- and leave the totals alone.
 let lastBom = null;
-function renderBom(s, hexes, rim) {
+function renderBom(s, hexes, rim, plan) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
@@ -132,8 +210,8 @@ function renderBom(s, hexes, rim) {
     LED_channels: s.counts.leds,
     Sensors_left_out: skipped,
     IO_expander_nodes: new Set(trunks.map((t) => t.stops[0].key)).size,
-    Backboard: boardOn && rim.length ? 1 : 0,
-    Backboard_size: rim.length ? `${formatLength(span('x'))} × ${formatLength(span('z'))}` : '',
+    Backboard_sheets: boardOn && plan ? plan.count : 0,
+    Backboard_size: rim.length && plan ? `${sheetSize(plan)} sheets, for a ${formatLength(span('x'))} × ${formatLength(span('z'))} board` : '',
   });
   const { sections } = bom;
   $('bom-for').textContent = `for ${hexes.length} hexagon${hexes.length === 1 ? '' : 's'}`;
@@ -277,8 +355,14 @@ function update() {
   const picks = sensing ? { nodes: allNodes, selected: nodePicks, noSensor } : null;
   const labels = sensing ? allNodes : null;
   const sensors = sensing ? sensorPaths(buildSensors(hexes, edges, lattice, allNodes, noSensor), lattice) : null;
+  // the board follows the outline, grown so the node bodies sit on it, and is cut from stock sheets
+  const rimLoops = outline.map((loop) => offsetLoop(loop, lattice.rho));
+  const sheetW = parseFloat(sheetWIn.value) * scale;
+  const sheetH = parseFloat(sheetHIn.value) * scale;
+  lastPlan = boardOn ? planSheets(rimLoops, sheetW, sheetH) : null;
+  const sheets = page === SHEETS_PAGE && lastPlan ? { plan: lastPlan, loops: rimLoops } : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, sensors });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, sensors, sheets });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
@@ -305,10 +389,11 @@ function update() {
   $('tally-sensors').textContent = s.counts.nodes - skipped;
   $('tally-nosensor').textContent = skipped;
   // the board follows the outline, grown so the node bodies sit on it
-  const rim = outline.flatMap((loop) => offsetLoop(loop, lattice.rho));
+  const rim = rimLoops.flat();
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   $('board-size').textContent = boardOn && rim.length ? `Board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
-  renderBom(s, hexes, rim);
+  renderBom(s, hexes, rim, lastPlan);
+  renderSheets(rim, sheetW, sheetH);
   if (page === PLAYBOOK_PAGE) showPlaybook(s, hexes, edges);
 
   if (gridHexes.length === 0) {
@@ -325,7 +410,7 @@ function update() {
 function setUnit(next) {
   if (next === unit) return;
   const factor = UNITS[unit] / UNITS[next];
-  for (const input of [widthIn, heightIn, thicknessIn, raiseIn]) {
+  for (const input of [widthIn, heightIn, thicknessIn, raiseIn, sheetWIn, sheetHIn]) {
     const v = parseFloat(input.value);
     if (v > 0) input.value = +(v * factor).toFixed(DECIMALS[next]);
   }
@@ -561,7 +646,7 @@ const app = document.querySelector('.app');
 const backBtn = $('back-btn');
 const nextBtn = $('next-btn');
 const editBtn = $('edit-btn');
-const hintFor = (v) => (page === SENSOR_PAGE ? HINTS.sensors : page === PARTS_PAGE ? HINTS.parts : page === PLAYBOOK_PAGE ? '' : HINTS[v]);
+const hintFor = (v) => (page === SENSOR_PAGE ? HINTS.sensors : page === SHEETS_PAGE ? HINTS.sheets : page === PARTS_PAGE ? HINTS.parts : page === PLAYBOOK_PAGE ? '' : HINTS[v]);
 
 // the guide's own page, by id; Back and Next step through it, and Back from its first page returns to the parts list
 let guidePage = GUIDE_PAGES[0].id;
@@ -600,6 +685,8 @@ function setPage(next) {
   if (viewer) hint.textContent = hintFor(view);
   // the touch sensors page pales the LED channels
   viewer?.setTheme();
+  // the sheets are drawn on the flat drawing
+  if (page === SHEETS_PAGE && view === '3d') setView('2d');
   if (lattice) update();
   if (page === PLAYBOOK_PAGE) setGuidePage(guidePage);
 }
@@ -857,6 +944,8 @@ const snapshot = () => ({
   height: heightIn.value,
   thickness: thicknessIn.value,
   raise: raiseIn.value,
+  sheetW: sheetWIn.value,
+  sheetH: sheetHIn.value,
   board: boardOn,
   excluded: [...excluded],
   noSensor: [...noSensor],
@@ -873,6 +962,9 @@ function restore(c) {
   heightIn.value = c.height ?? heightIn.value;
   thicknessIn.value = c.thickness ?? thicknessIn.value;
   raiseIn.value = c.raise ?? raiseIn.value;
+  // a design saved before sheets were planned gets 4 × 5 ft
+  sheetWIn.value = c.sheetW ?? inUnit(4 * FT);
+  sheetHIn.value = c.sheetH ?? inUnit(5 * FT);
   setBoard(c.board !== false);
   for (const [set, list] of [[excluded, c.excluded], [noSensor, c.noSensor]]) {
     set.clear();
@@ -1405,6 +1497,8 @@ async function start() {
   widthIn.addEventListener('input', update);
   heightIn.addEventListener('input', update);
   thicknessIn.addEventListener('input', update);
+  sheetWIn.addEventListener('input', update);
+  sheetHIn.addEventListener('input', update);
   raiseIn.addEventListener('input', update);
   svg.classList.add('flat');
   const share = new URLSearchParams(location.search).get('s');

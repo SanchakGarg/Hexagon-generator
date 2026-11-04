@@ -162,7 +162,7 @@ export function sensorsSvg(s, lat, y) {
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, channelJumps = null, sensors = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, channelJumps = null, sensors = null, sheets = null }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -184,6 +184,13 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     ext.maxX = Math.max(ext.maxX, h.x + lat.hw);
     ext.minY = Math.min(ext.minY, y(h.z) - lat.hh);
     ext.maxY = Math.max(ext.maxY, y(h.z) + lat.hh);
+  }
+  // the sheets page: the stock sheets can reach past the wall
+  for (const c of sheets?.plan.cells ?? []) {
+    ext.minX = Math.min(ext.minX, c.x0);
+    ext.maxX = Math.max(ext.maxX, c.x1);
+    ext.minY = Math.min(ext.minY, y(c.z1));
+    ext.maxY = Math.max(ext.maxY, y(c.z0));
   }
   const viewBox = {
     x: ext.minX - pad,
@@ -211,6 +218,15 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     <line x1="${fmt(dx - tick)}" y1="${fmt(H)}" x2="${fmt(dx + tick)}" y2="${fmt(H)}"/>
     <text x="${fmt(dx - tick * 1.4)}" y="${fmt(H / 2)}" text-anchor="middle" font-size="${fmt(fsDim)}" transform="rotate(-90 ${fmt(dx - tick * 1.4)} ${fmt(H / 2)})">${esc(formatLength(H))}</text>
   </g>`);
+
+  // the sheets page: the board shaded, and each sheet over it as a dashed box with its number
+  if (sheets) {
+    const d = sheets.loops.map((l) => `M${l.map((p) => `${fmt(p.x)},${fmt(y(p.z))}`).join(' L')} Z`).join(' ');
+    parts.push(`<path class="board-rim" d="${d}" fill-rule="evenodd"/>`);
+    for (const c of sheets.plan.cells) {
+      parts.push(`<rect class="sheet-cell" x="${fmt(c.x0)}" y="${fmt(y(c.z1))}" width="${fmt(c.x1 - c.x0)}" height="${fmt(c.z1 - c.z0)}"/>`);
+    }
+  }
 
   for (const h of excluded) {
     const tip = `${h.id} · row ${h.row}, col ${h.col}\nExcluded · click to restore`;
@@ -254,6 +270,13 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
       const cls = `pick${picks.selected.has(n.key) ? ' on' : ''}${picks.noSensor.has(n.key) ? ' nosensor' : ''}`;
       const d = r * 0.7;
       parts.push(`<g class="${cls}" data-node="${n.key}"><circle cx="${fmt(n.x)}" cy="${fmt(y(n.z))}" r="${fmt(r)}"/><path d="M${fmt(n.x - d)},${fmt(y(n.z) + d)} L${fmt(n.x + d)},${fmt(y(n.z) - d)}"/></g>`);
+    }
+  }
+
+  if (sheets) {
+    const fs = Math.min(sheets.plan.sw, sheets.plan.sh) * 0.16;
+    for (const c of sheets.plan.cells) {
+      parts.push(`<text class="sheet-num" x="${fmt(c.x0 + fs * 0.35)}" y="${fmt(y(c.z1) + fs * 1.05)}" font-size="${fmt(fs)}">${c.n}</text>`);
     }
   }
 

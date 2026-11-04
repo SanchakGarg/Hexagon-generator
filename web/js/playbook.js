@@ -604,16 +604,43 @@ function linked(text) {
 // an item's name, linked to its shop when the vendor is a link
 const itemName = (i) => (isUrl(i.link) ? h('a', { href: i.link.trim(), target: '_blank', rel: 'noopener', title: `Buy at ${vendorName(i.link)}` }, i.label) : i.label);
 
+const ICONS = {
+  edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
+  done: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10.5l5 5 5-5"/><path d="M5 20h14"/></svg>',
+  caret: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>',
+};
+
+// an Export button that opens a short menu of formats; picking one, or clicking away, closes it
+function exportMenu(items) {
+  const menu = h('details', { class: 'pb-menu' });
+  const close = () => menu.removeAttribute('open');
+  menu.append(
+    h('summary', { class: 'btn tool', title: 'Download the parts list' }, h('span', { class: 'ico', html: ICONS.download }), h('span', {}, 'Export'), h('span', { class: 'ico caret', html: ICONS.caret })),
+    h(
+      'div',
+      { class: 'pb-menu-list', role: 'menu' },
+      items.map(([label, hint, run]) => h('button', { type: 'button', role: 'menuitem', onclick: () => (close(), run()) }, h('b', {}, label), h('small', {}, hint))),
+    ),
+  );
+  document.addEventListener('click', (e) => !menu.contains(e.target) && close());
+  menu.addEventListener('keydown', (e) => e.key === 'Escape' && (close(), menu.querySelector('summary').focus()));
+  return menu;
+}
+
 function bomSheet(ctx) {
   const { edits, rupees } = ctx;
   const table = h('div', { class: 'pb-bom', role: 'table', 'aria-label': 'Parts list' });
   const totalEl = h('b', { class: 'amount' });
   // the list reads as a list; one Edit button above it opens every field at once
   let editing = false;
-  const editBtn = h('button', { type: 'button', class: 'btn', 'aria-pressed': 'false' }, 'Edit');
+  const editLabel = h('span', {}, 'Edit');
+  const editBtn = h('button', { type: 'button', class: 'btn tool', 'aria-pressed': 'false', title: 'Change quantities, prices, descriptions and vendors, or add items' }, h('span', { class: 'ico', html: ICONS.edit }), editLabel);
   editBtn.addEventListener('click', () => {
     editing = !editing;
-    editBtn.textContent = editing ? 'Done' : 'Edit';
+    editLabel.textContent = editing ? 'Done' : 'Edit';
+    editBtn.querySelector('.ico').innerHTML = editing ? ICONS.done : ICONS.edit;
+    editBtn.classList.toggle('primary', editing);
     editBtn.setAttribute('aria-pressed', String(editing));
     table.classList.toggle('editing', editing);
     draw();
@@ -753,13 +780,14 @@ function bomSheet(ctx) {
 
   return sheet(
     'parts',
-    h('p', {}, 'Everything to buy for this wall, section by section in the order you build it. An item’s name links to where to buy it. Press Edit to change any quantity, price, description or vendor, or to add your own items; your changes stay in this browser until you share the guide.'),
     h(
       'div',
-      { class: 'pb-actions no-print' },
-      editBtn,
-      h('button', { type: 'button', class: 'btn', onclick: () => ctx.exportExcel(mergeBom(ctx.bom, edits)) }, 'Export Excel'),
-      h('button', { type: 'button', class: 'btn', onclick: () => printBom(ctx, mergeBom(ctx.bom, edits)) }, 'Export PDF'),
+      { class: 'pb-bom-head' },
+      h('p', {}, 'Everything to buy for this wall, section by section in the order you build it. An item’s name links to where to buy it. Edit changes any quantity, price, description or vendor, or adds your own items; your changes stay in this browser until you share the guide.'),
+      h('div', { class: 'pb-tools no-print' }, editBtn, exportMenu([
+        ['Excel (.xlsx)', 'Every quantity as a formula you can edit', () => ctx.exportExcel(mergeBom(ctx.bom, edits))],
+        ['PDF', 'A printable table with clickable shop links', () => printBom(ctx, mergeBom(ctx.bom, edits))],
+      ])),
     ),
     table,
     // the printed book has the list as a plain table instead of the fields

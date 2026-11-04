@@ -21,7 +21,8 @@ const PER = {
   'plain node': { of: (w) => w.Nodes - w.Central_nodes - (w.IO_expander_nodes ?? 0), f: '(Nodes-Central_nodes-IO_expander_nodes)' },
   'touch sensor': { of: (w) => w.Nodes - w.Sensors_left_out, f: '(Nodes-Sensors_left_out)' },
   'led channel': { of: (w) => w.LED_channels, f: 'LED_channels' },
-  backboard: { of: (w) => w.Backboard, f: 'Backboard' },
+  // a backboard sheet: as many as the Backboard sheets page lays out (0 when the backboard is off)
+  backboard: { of: (w) => w.Backboard_sheets ?? w.Backboard ?? 0, f: 'Backboard_sheets' },
 };
 export const PER_NAMES = Object.keys(PER);
 // settings the rest of the app reads (the build guide's steps and channel drawing); the sheet must keep these
@@ -150,7 +151,7 @@ function noteOf(it, wall) {
 
 // The parts list for one wall: sections of items { key, label, qty, rate, note, desc, link, f }, as the page and the
 // Excel download expect them. wall holds the wall's counts: Hexagons, Nodes, Central_nodes, LED_channels,
-// Sensors_left_out, IO_expander_nodes, Backboard (1 when on) and Backboard_size (text).
+// Sensors_left_out, IO_expander_nodes, Backboard_sheets (0 when the backboard is off) and Backboard_size (text).
 export function buildBom(parts, wall) {
   wall = { IO_expander_nodes: 0, ...wall };
   const settings = settingsOf(parts);

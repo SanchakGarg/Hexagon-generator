@@ -101,7 +101,34 @@
         </div>
       </details>
 
-      <details class="card" data-section="nodes" data-page-only="3" open>
+      <details class="card" data-section="sheets" data-page-only="3" open>
+        <summary><h2>Backboard sheets</h2></summary>
+        <div class="card-body">
+          <p class="help">The size of one sheet you buy. The board is cut from as few sheets as will cover it; each sheet's cutout is in the DXF.</p>
+          <div class="seg presets" role="group" aria-label="Common sheet sizes" id="sheet-presets">
+            <button type="button" data-ft="4x5">4 × 5 ft</button>
+            <button type="button" data-ft="4x8">4 × 8 ft</button>
+          </div>
+          <form class="fields" id="sheet-form" onsubmit="return false">
+            <label for="sheet-w">Sheet width</label>
+            <div class="field">
+              <input id="sheet-w" type="number" min="0" step="any" value="1.2192" inputmode="decimal">
+              <span class="suffix" data-unit-label>m</span>
+            </div>
+            <label for="sheet-h">Sheet height</label>
+            <div class="field">
+              <input id="sheet-h" type="number" min="0" step="any" value="1.524" inputmode="decimal">
+              <span class="suffix" data-unit-label>m</span>
+            </div>
+          </form>
+          <div class="actions">
+            <button type="button" class="btn primary" id="dxf-btn" title="Download every sheet's cutout as a DXF, in millimetres">Export DXF</button>
+          </div>
+          <p class="note" id="sheet-note" role="status"></p>
+        </div>
+      </details>
+
+      <details class="card" data-section="nodes" data-page-only="4" open>
         <summary><h2>Nodes</h2></summary>
         <div class="card-body">
           <div class="lines tally">
@@ -112,7 +139,7 @@
       </details>
 
       <!-- the assembly guide: download and share at the top, then its contents -->
-      <div class="card guide-tools" data-page-only="4">
+      <div class="card guide-tools" data-page-only="5">
         <div class="actions">
           <button type="button" class="btn primary" id="pdf-btn" title="Download the whole guide as a PDF, through your browser's print dialog">Download PDF</button>
           <button type="button" class="btn" id="share-btn" title="Make a link anyone can open this guide with">Share link</button>
@@ -121,12 +148,12 @@
         <button type="button" class="link-btn" id="edit-design">← Back to the design</button>
       </div>
 
-      <nav class="card toc-card" data-page-only="4" aria-labelledby="toc-title">
+      <nav class="card toc-card" data-page-only="5" aria-labelledby="toc-title">
         <h2 id="toc-title">Contents</h2>
         <ol class="toc" id="toc"></ol>
       </nav>
 
-      <details class="card" data-section="show" data-page-not="4" open>
+      <details class="card" data-section="show" data-page-not="5" open>
         <summary><h2 id="layers-title">Show</h2></summary>
         <div class="card-body">
           <div class="toggles" role="group" aria-labelledby="layers-title" id="layers">
@@ -203,14 +230,18 @@
               </div>
             </div>
             <div data-page-only="3">
+              <h2>Sheets</h2>
+              <div class="lines" id="sheet-sum"></div>
+            </div>
+            <div data-page-only="4">
               <div class="bom-head"><h2>Parts list</h2><span class="for" id="bom-for"></span><button type="button" class="btn" id="bom-xlsx" title="Download the parts list as an Excel sheet you can edit">Excel</button></div>
               <div class="lines bom" id="bom"></div>
             </div>
           </div>
         </aside>
       </div>
-      <!-- page 4: the assembly guide, a book of sheets read one at a time -->
-      <div class="playbook" id="playbook" data-page-only="4" aria-label="Assembly guide"></div>
+      <!-- page 5: the assembly guide, a book of sheets read one at a time -->
+      <div class="playbook" id="playbook" data-page-only="5" aria-label="Assembly guide"></div>
     </main>
 
     <footer class="footer">
