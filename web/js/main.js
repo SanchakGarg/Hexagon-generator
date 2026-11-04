@@ -122,12 +122,16 @@ function renderBom(s, hexes, rim) {
   const present = new Set(allNodes.map((n) => n.key));
   const skipped = [...noSensor].filter((k) => present.has(k)).length;
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
+  // the General Nodes that send a touch sensor group to the centre over I2C (3, 6, 9) carry the IO expander; one
+  // whose group has no sensor left in it is built as a plain General Node
+  const { trunks } = buildSensors(hexes, lastLayout?.edges ?? [], lattice, allNodes, noSensor);
   const bom = buildBom(partsDef, {
     Hexagons: hexes.length,
     Nodes: s.counts.nodes,
     Central_nodes: s.counts.mcu,
     LED_channels: s.counts.leds,
     Sensors_left_out: skipped,
+    IO_expander_nodes: new Set(trunks.map((t) => t.stops[0].key)).size,
     Backboard: boardOn && rim.length ? 1 : 0,
     Backboard_size: rim.length ? `${formatLength(span('x'))} × ${formatLength(span('z'))}` : '',
   });
@@ -138,11 +142,22 @@ function renderBom(s, hexes, rim) {
   const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
   const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
   // written like a note in three columns: what (with the working in small print beneath), how many, and the amount
-  const line = (cls, label, note, qty, amount) => {
+  const line = (cls, label, note, qty, amount, href, desc) => {
     const p = document.createElement('p');
     p.className = cls;
     const what = document.createElement('span');
-    what.textContent = label;
+    // an item whose vendor is a shop link is named by that link
+    if (href) {
+      const a = document.createElement('a');
+      Object.assign(a, { href: href.trim(), target: '_blank', rel: 'noopener', textContent: label, title: `Buy at ${vendorName(href)}` });
+      what.append(a);
+    } else what.textContent = label;
+    if (desc) {
+      const d = document.createElement('small');
+      d.className = 'desc';
+      d.textContent = desc;
+      what.append(d);
+    }
     if (note) {
       const small = document.createElement('small');
       small.textContent = note;
@@ -162,7 +177,7 @@ function renderBom(s, hexes, rim) {
     for (const i of sec.items) {
       const working = [`${i.rate == null ? '--' : rupees(i.rate)} each`, i.note].filter(Boolean).join(' · ');
       const c = cost(i);
-      out.push(line('line item', i.label, working, i.qty ?? '--', c == null ? '--' : rupees(c)));
+      out.push(line('line item', i.label, working, i.qty ?? '--', c == null ? '--' : rupees(c), isUrl(i.link) ? i.link : '', i.desc));
     }
   }
   const all = sections.flatMap((x) => x.items);

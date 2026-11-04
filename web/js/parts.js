@@ -16,6 +16,9 @@ const PER = {
   node: { of: (w) => w.Nodes, f: 'Nodes' },
   'central node': { of: (w) => w.Central_nodes, f: 'Central_nodes' },
   'other node': { of: (w) => w.Nodes - w.Central_nodes, f: '(Nodes-Central_nodes)' },
+  // General Nodes that collect a touch sensor group and send it to the centre over I2C carry the IO expander
+  'io expander node': { of: (w) => w.IO_expander_nodes ?? 0, f: 'IO_expander_nodes' },
+  'plain node': { of: (w) => w.Nodes - w.Central_nodes - (w.IO_expander_nodes ?? 0), f: '(Nodes-Central_nodes-IO_expander_nodes)' },
   'touch sensor': { of: (w) => w.Nodes - w.Sensors_left_out, f: '(Nodes-Sensors_left_out)' },
   'led channel': { of: (w) => w.LED_channels, f: 'LED_channels' },
   backboard: { of: (w) => w.Backboard, f: 'Backboard' },
@@ -141,14 +144,15 @@ function noteOf(it, wall) {
   if (it.qty == null) return '';
   if (it.per.name === 'backboard') return wall.Backboard_size ?? '';
   if (it.per.name === 'wall') return '';
-  const label = it.per.name.replace('led', 'LED');
+  const label = it.per.name.replace('led', 'LED').replace('io expander', 'IO expander');
   return `${it.qty} per ${it.per.n === 1 ? label : `${it.per.n} ${plural(it.per.n, label)}`}`;
 }
 
 // The parts list for one wall: sections of items { key, label, qty, rate, note, desc, link, f }, as the page and the
 // Excel download expect them. wall holds the wall's counts: Hexagons, Nodes, Central_nodes, LED_channels,
-// Sensors_left_out, Backboard (1 when on) and Backboard_size (text).
+// Sensors_left_out, IO_expander_nodes, Backboard (1 when on) and Backboard_size (text).
 export function buildBom(parts, wall) {
+  wall = { IO_expander_nodes: 0, ...wall };
   const settings = settingsOf(parts);
   const sections = [];
   for (const raw of parts.items) {

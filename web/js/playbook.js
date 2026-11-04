@@ -583,10 +583,41 @@ const cost = (i) => (i.qty != null && i.rate != null ? i.qty * i.rate : null);
 const sum = (items) => items.reduce((t, i) => t + (cost(i) ?? 0), 0);
 const num = (v) => (v === '' || v == null || !Number.isFinite(+v) ? null : +v);
 
+// text with its web links and phone numbers made into links: a shop link reads as the shop's name
+const LINKABLE = /(https?:\/\/\S+)|(\+?\d[\d\s-]{8,}\d)/g;
+function linked(text) {
+  const s = String(text ?? '');
+  const out = [];
+  let at = 0;
+  for (const m of s.matchAll(LINKABLE)) {
+    if (m.index > at) out.push(s.slice(at, m.index));
+    out.push(
+      m[1]
+        ? h('a', { href: m[1], target: '_blank', rel: 'noopener', title: m[1] }, vendorName(m[1]))
+        : h('a', { href: `tel:${m[2].replace(/[\s-]/g, '')}` }, m[2]),
+    );
+    at = m.index + m[0].length;
+  }
+  if (at < s.length) out.push(s.slice(at));
+  return out;
+}
+// an item's name, linked to its shop when the vendor is a link
+const itemName = (i) => (isUrl(i.link) ? h('a', { href: i.link.trim(), target: '_blank', rel: 'noopener', title: `Buy at ${vendorName(i.link)}` }, i.label) : i.label);
+
 function bomSheet(ctx) {
   const { edits, rupees } = ctx;
   const table = h('div', { class: 'pb-bom', role: 'table', 'aria-label': 'Parts list' });
   const totalEl = h('b', { class: 'amount' });
+  // the list reads as a list; one Edit button above it opens every field at once
+  let editing = false;
+  const editBtn = h('button', { type: 'button', class: 'btn', 'aria-pressed': 'false' }, 'Edit');
+  editBtn.addEventListener('click', () => {
+    editing = !editing;
+    editBtn.textContent = editing ? 'Done' : 'Edit';
+    editBtn.setAttribute('aria-pressed', String(editing));
+    table.classList.toggle('editing', editing);
+    draw();
+  });
   const save = () => {
     ctx.onEdits(edits);
     draw();
@@ -611,12 +642,57 @@ function bomSheet(ctx) {
     totalEl.textContent = rupees(sum(merged.sections.flatMap((s) => s.items)));
   }
 
+  // a row as it reads: name (linked to its shop) with the working beneath, description, numbers and the shop
+  function readRow(item, amountEl) {
+    const o = item.custom ? {} : edits.overrides[item.key] ?? {};
+    const mark = (k, cls) => `${cls}${k in o ? ' edited' : ''}`;
+    return h(
+      'div',
+      { class: `pb-row item read${item.custom ? ' custom' : ''}`, role: 'row' },
+      h('span', { class: 'label' }, itemName(item) || h('i', {}, 'unnamed'), item.note ? h('small', {}, item.note) : null),
+      h('span', { class: mark('desc', 'desc') }, linked(item.desc)),
+      h('span', { class: mark('qty', 'num') }, item.qty ?? '--'),
+      h('span', { class: mark('rate', 'num') }, item.rate == null ? '--' : rupees(item.rate)),
+      amountEl,
+      h('span', { class: mark('link', 'vendor') }, linked(item.link)),
+      h('span'),
+    );
+  }
+
+  function editRow(item) {
+    let label;
+    let tools;
+    if (item.custom) {
+      const c = edits.custom.find((x) => x.id === item.key);
+      label = field('label', item.label, { placeholder: 'New item', 'aria-label': 'Item' }, (v) => (c.label = v));
+      tools = h('button', { type: 'button', class: 'mini', title: 'Remove this item', 'aria-label': 'Remove this item', onclick: () => ((edits.custom = edits.custom.filter((x) => x !== c)), save()) }, '×');
+    } else {
+      label = h('span', { class: 'label' }, item.label, item.note ? h('small', {}, item.note) : null);
+      tools = h('button', { type: 'button', class: 'mini', title: 'Back to the worked-out values', 'aria-label': 'Reset this row', onclick: () => (delete edits.overrides[item.key], save()) }, '↺');
+    }
+    const set = (k, v) => {
+      if (item.custom) {
+        edits.custom.find((x) => x.id === item.key)[k] = v;
+      } else {
+        const o = (edits.overrides[item.key] ??= {});
+        // back to what was worked out: no longer an edit
+        if ((k === 'qty' || k === 'rate') && v === (item.base?.[k] ?? null)) delete o[k];
+        else if ((k === 'desc' || k === 'link') && v === (item.base?.[k] ?? '')) delete o[k];
+        else o[k] = v;
+        if (!Object.keys(o).length) delete edits.overrides[item.key];
+      }
+    };
+    return { label, tools, set };
+  }
+
   function draw() {
     merged = mergeBom(ctx.bom, edits);
     rows = [];
     const head = h('div', { class: 'pb-row cols', role: 'row' }, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor', ''].map((t) => h('span', { role: 'columnheader' }, t)));
     const out = [head];
     merged.sections.forEach((sec, si) => {
+      // an empty section (Extras, before anything is added) only shows while editing
+      if (!editing && !sec.items.length) return;
       const subEl = h('b', { class: 'amount' });
       out.push(h('div', { class: 'pb-row section', role: 'row' }, h('span', { class: 'sec-title' }, sec.title, sec.note ? h('small', {}, sec.note) : null), h('span'), h('span'), h('span'), subEl, h('span'), h('span')));
       rows.push(() => (subEl.textContent = rupees(sum(merged.sections[si].items))));
@@ -627,48 +703,11 @@ function bomSheet(ctx) {
           const c = cost(cur());
           amountEl.textContent = c == null ? '--' : rupees(c);
         });
-        let label;
-        let tools;
-        if (item.custom) {
-          const c = edits.custom.find((x) => x.id === item.key);
-          label = field('label', item.label, { placeholder: 'New item', 'aria-label': 'Item' }, (v) => (c.label = v));
-          tools = h('button', { type: 'button', class: 'mini', title: 'Remove this item', 'aria-label': 'Remove this item', onclick: () => ((edits.custom = edits.custom.filter((x) => x !== c)), save()) }, '×');
-        } else {
-          label = h('span', { class: 'label' }, item.label, item.note ? h('small', {}, item.note) : null);
-          tools = h('button', { type: 'button', class: 'mini', title: 'Back to the worked-out values', 'aria-label': 'Reset this row', onclick: () => (delete edits.overrides[item.key], save()) }, '↺');
+        if (!editing) {
+          out.push(readRow(item, amountEl));
+          return;
         }
-        const set = (k, v) => {
-          if (item.custom) {
-            edits.custom.find((x) => x.id === item.key)[k] = v;
-          } else {
-            const o = (edits.overrides[item.key] ??= {});
-            // back to what was worked out: no longer an edit
-            if ((k === 'qty' || k === 'rate') && v === (item.base?.[k] ?? null)) delete o[k];
-            else if ((k === 'desc' || k === 'link') && v === (item.base?.[k] ?? '')) delete o[k];
-            else o[k] = v;
-            if (!Object.keys(o).length) delete edits.overrides[item.key];
-          }
-        };
-        const link = field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Vendor for ${item.label || 'item'}` }, (v) => set('link', v.trim()));
-        // a link reads as the shop's name, linked; the pencil opens the link itself to change it
-        const shop = h('a', { class: 'shop', target: '_blank', rel: 'noopener' });
-        const pencil = h('button', { type: 'button', class: 'mini', title: 'Change the link', 'aria-label': `Change the vendor link for ${item.label || 'item'}` }, '✎');
-        const showShop = () => {
-          const v = link.value.trim();
-          const on = isUrl(v) && document.activeElement !== link;
-          shop.href = on ? v : '#';
-          shop.textContent = on ? vendorName(v) : '';
-          shop.title = on ? v : '';
-          shop.hidden = pencil.hidden = !on;
-          link.hidden = on;
-        };
-        pencil.addEventListener('click', () => {
-          shop.hidden = pencil.hidden = true;
-          link.hidden = false;
-          link.focus();
-        });
-        link.addEventListener('blur', showShop);
-        showShop();
+        const { label, tools, set } = editRow(item);
         let rowEl = null;
         rows.push(() => {
           if (!rowEl || item.custom) return;
@@ -685,11 +724,12 @@ function bomSheet(ctx) {
             field('qty', item.qty, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Quantity of ${item.label || 'item'}` }, (v) => set('qty', num(v))),
             field('rate', item.rate, { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '--', 'aria-label': `Price each of ${item.label || 'item'}` }, (v) => set('rate', num(v))),
             amountEl,
-            h('span', { class: 'linkcell' }, link, shop, pencil),
+            field('link', item.link, { placeholder: 'shop link, phone…', 'aria-label': `Vendor for ${item.label || 'item'}` }, (v) => set('link', v.trim())),
             tools,
           )),
         );
       });
+      if (!editing) return;
       const add = h('button', { type: 'button', class: 'add', onclick: () => {
         const id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
         edits.custom.push({ id, section: sec.title, label: '', qty: 1, rate: null, desc: '', link: '' });
@@ -713,10 +753,11 @@ function bomSheet(ctx) {
 
   return sheet(
     'parts',
-    h('p', {}, 'Everything to buy for this wall. Change any quantity, price or description, add where to buy it, or add your own items. Your changes stay in this browser until you share the guide.'),
+    h('p', {}, 'Everything to buy for this wall, section by section in the order you build it. An item’s name links to where to buy it. Press Edit to change any quantity, price, description or vendor, or to add your own items; your changes stay in this browser until you share the guide.'),
     h(
       'div',
       { class: 'pb-actions no-print' },
+      editBtn,
       h('button', { type: 'button', class: 'btn', onclick: () => ctx.exportExcel(mergeBom(ctx.bom, edits)) }, 'Export Excel'),
       h('button', { type: 'button', class: 'btn', onclick: () => printBom(ctx, mergeBom(ctx.bom, edits)) }, 'Export PDF'),
     ),
@@ -726,21 +767,38 @@ function bomSheet(ctx) {
   );
 }
 
-// the parts list as a plain table, for print
+// the parts list as a plain table, for print: wide name and description columns, and every shop a link
 function bomTable(ctx, merged) {
   const money = (v) => (v == null ? '' : ctx.rupees(v));
-  const cell = (tag, text, cls) => h(tag, cls ? { class: cls } : {}, text ?? '');
+  const cell = (tag, kids, cls) => h(tag, cls ? { class: cls } : {}, kids ?? '');
   const rows = [];
   for (const sec of merged.sections) {
     if (!sec.items.length) continue;
-    rows.push(h('tr', { class: 'sec' }, cell('td', sec.title), cell('td', ''), cell('td', ''), cell('td', ''), cell('td', money(sum(sec.items)), 'n'), cell('td', '')));
+    rows.push(h('tr', { class: 'sec' }, h('td', { colspan: '4' }, sec.title), cell('td', money(sum(sec.items)), 'n'), cell('td', '')));
     for (const i of sec.items) {
-      const vendor = isUrl(i.link) ? h('td', {}, h('a', { href: i.link.trim() }, vendorName(i.link))) : cell('td', i.link);
-      rows.push(h('tr', {}, cell('td', i.label), cell('td', i.desc), cell('td', i.qty ?? '', 'n'), cell('td', money(i.rate), 'n'), cell('td', money(cost(i)), 'n'), vendor));
+      rows.push(
+        h(
+          'tr',
+          {},
+          cell('td', [itemName(i), i.note ? h('small', {}, i.note) : null], 'item'),
+          cell('td', linked(i.desc)),
+          cell('td', i.qty ?? '', 'n'),
+          cell('td', money(i.rate), 'n'),
+          cell('td', money(cost(i)), 'n'),
+          cell('td', linked(i.link)),
+        ),
+      );
     }
   }
-  rows.push(h('tr', { class: 'total' }, cell('td', 'Total'), cell('td', ''), cell('td', ''), cell('td', ''), cell('td', money(sum(merged.sections.flatMap((s) => s.items))), 'n'), cell('td', '')));
-  return h('table', { class: 'print-table' }, h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))), h('tbody', {}, rows));
+  rows.push(h('tr', { class: 'total' }, h('td', { colspan: '4' }, 'Total'), cell('td', money(sum(merged.sections.flatMap((s) => s.items))), 'n'), cell('td', '')));
+  const widths = ['24%', '33%', '6%', '10%', '10%', '17%'];
+  return h(
+    'table',
+    { class: 'print-table' },
+    h('colgroup', {}, widths.map((w) => h('col', { style: `width:${w}` }))),
+    h('thead', {}, h('tr', {}, ['Item', 'Description', 'Qty', 'Price each', 'Amount', 'Vendor'].map((t, i) => cell('th', t, i >= 2 && i <= 4 ? 'n' : '')))),
+    h('tbody', {}, rows),
+  );
 }
 
 // the parts list's own PDF is the browser's print to PDF of the plain table, and nothing else on the page
