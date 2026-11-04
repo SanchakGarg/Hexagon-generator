@@ -156,6 +156,7 @@ function renderBom(s, hexes, rim) {
       const d = document.createElement('small');
       d.className = 'desc';
       d.textContent = desc;
+      d.title = desc;
       what.append(d);
     }
     if (note) {
