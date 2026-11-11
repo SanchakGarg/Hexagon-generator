@@ -847,6 +847,8 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .dim polygon { fill: var(--muted); stroke: none; }
 .hexdim line, .hexdim path { stroke: var(--accent); }
 .hexdim text, .hexdim polygon { fill: var(--accent); }
+.builddim line, .builddim path { stroke: var(--ink); }
+.builddim text, .builddim polygon { fill: var(--ink); }
 
 .check {
   display: flex;

@@ -203,6 +203,18 @@ export function dimensionSvg(d) {
   return `<path class="ext" d="${d.ext.map(seg).join(' ')}"/><path d="${seg(d.line)}"/>${d.arrows.map((h) => `<polygon points="${pts(h)}"/>`).join('')}<text x="${fmt(t.x)}" y="${fmt(t.y)}" text-anchor="middle" font-size="${fmt(t.fs)}" transform="rotate(${fmt(t.angle)} ${fmt(t.x)} ${fmt(t.y)})">${esc(t.label)}</text>`;
 }
 
+// The whole build of hexagons, flat side to flat side across and corner to corner up, in wall metres.
+export function buildExtent(hexes, lat) {
+  if (!hexes.length) return null;
+  const f = lat.pitch / 2;
+  return {
+    minX: Math.min(...hexes.map((h) => h.x)) - f,
+    maxX: Math.max(...hexes.map((h) => h.x)) + f,
+    minZ: Math.min(...hexes.map((h) => h.z)) - lat.R,
+    maxZ: Math.max(...hexes.map((h) => h.z)) + lat.R,
+  };
+}
+
 // The overall size of one hexagon (the top-left one, which has open space above and to its left), in screen
 // coordinates and lettered the same size as the wall's: its width across the flats above it, and its height
 // corner to corner on its left.
@@ -270,8 +282,16 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   parts.push(`<rect class="wall" x="0" y="0" width="${fmt(W)}" height="${fmt(H)}"/>`);
 
   const wallDim = { fs: fsDim, a: size * 0.016, gap: size * 0.006, ext: size * 0.014 };
-  const dy = ext.maxY + pad * 0.45;
+  // with dimensions on, the whole build's width sits under it, inside the wall's, and its height on the right
+  const be = hd ? buildExtent(hexes, lat) : null;
+  const dy = ext.maxY + pad * (be ? 0.75 : 0.45);
   const dx = ext.minX - pad * 0.45;
+  if (be) {
+    const bottom = y(be.minZ);
+    const by = ext.maxY + pad * 0.35;
+    const bx = Math.max(ext.maxX, W) + pad * 0.25;
+    parts.push(`<g class="dim builddim">${dimensionSvg(dimension({ x: be.minX, y: bottom }, { x: be.maxX, y: bottom }, by - bottom, formatLength(be.maxX - be.minX), wallDim))}${dimensionSvg(dimension({ x: be.maxX, y: y(be.minZ) }, { x: be.maxX, y: y(be.maxZ) }, bx - be.maxX, formatLength(be.maxZ - be.minZ), wallDim))}</g>`);
+  }
   parts.push(`<g class="dim">${dimensionSvg(dimension({ x: 0, y: H }, { x: W, y: H }, dy - H, formatLength(W), wallDim))}${dimensionSvg(dimension({ x: 0, y: H }, { x: 0, y: 0 }, dx, formatLength(H), wallDim))}</g>`);
 
   // the sheets page: the board shaded, and each sheet over it as a dashed box with its number

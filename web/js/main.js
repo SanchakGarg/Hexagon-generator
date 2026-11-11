@@ -1,6 +1,6 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes, plateFacing } from './layout.js';
-import { renderWall, dimension, hexDimensions } from './render.js';
+import { renderWall, dimension, hexDimensions, buildExtent } from './render.js';
 import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths, switchSettings } from './wiring.js';
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
@@ -600,12 +600,16 @@ $('hide-all-btn').addEventListener('click', () => {
 });
 
 // --- page 1: the dimensions, listed and drawn, and the wall as PNGs from the front and isometric ------------------------------
-// wall first, then one hexagon's overall width (across its flats) and height (corner to corner)
+// wall first, then the whole build of hexagons, then one hexagon: width across the flats, height corner to corner
 function dimRows(W, H, hexes) {
   const rows = [['Wall', null], ['Width', formatLength(W)], ['Height', formatLength(H)]];
   if (lattice && hexes.length) {
+    const be = buildExtent(hexes, lattice);
     rows.push(
-      [`Hexagon (${hexes.length} placed)`, null],
+      [`All hexagons (${hexes.length})`, null],
+      ['Width', formatLength(be.maxX - be.minX)],
+      ['Height', formatLength(be.maxZ - be.minZ)],
+      ['One hexagon', null],
       ['Width', formatLength(lattice.pitch)],
       ['Height', formatLength(2 * lattice.R)],
     );
@@ -708,7 +712,16 @@ async function viewCanvas(v, name) {
     const map = (p) => v.toPx({ x: p.x, y: lastLayout.H - p.y, z: max.z });
     // the wall's height stands clear of the hexagon's, which sits just outside its top-left hexagon
     const clear = hd ? Math.max(0, left - map({ x: hd.bounds.minX, y: 0 }).x) : 0;
-    paintDim(ctx, dimension({ x: bl.x, y: bl.y }, { x: tr.x, y: bl.y }, bottom - bl.y + 60, formatLength(W), style), muted);
+    // the whole build's width under the wall, inside the wall's own, and its height on the right
+    const be = dimsOn ? buildExtent(lastLayout.hexes, lattice) : null;
+    if (be) {
+      const b0 = map({ x: be.minX, y: lastLayout.H - be.minZ });
+      const b1 = map({ x: be.maxX, y: lastLayout.H - be.maxZ });
+      const rightmost = Math.max(tr.x, v.toPx({ x: max.x, y: 0, z }).x);
+      paintDim(ctx, dimension({ x: b0.x, y: b0.y }, { x: b1.x, y: b0.y }, bottom - b0.y + 60, formatLength(be.maxX - be.minX), style), ink);
+      paintDim(ctx, dimension({ x: b1.x, y: b0.y }, { x: b1.x, y: b1.y }, rightmost - b1.x + 60, formatLength(be.maxZ - be.minZ), style), ink);
+    }
+    paintDim(ctx, dimension({ x: bl.x, y: bl.y }, { x: tr.x, y: bl.y }, bottom - bl.y + (be ? 140 : 60), formatLength(W), style), muted);
     paintDim(ctx, dimension({ x: bl.x, y: bl.y }, { x: bl.x, y: tr.y }, -(bl.x - left + clear + 60), formatLength(H), style), muted);
     // the hexagon dimensions come in wall metres, y down from the wall's top; the front view is the same picture
     // scaled, so its points map through the view and its sizes scale with it
@@ -762,7 +775,7 @@ function download(canvas, filename) {
 
 // the front with its dimensions and the isometric, one file each, a moment apart so the browser takes both
 $('png-btn').addEventListener('click', async () => {
-  const views = viewer && lastLayout?.hexes.length ? viewer.views(VIEW_W, VIEW_H) : null;
+  const views = viewer && lastLayout?.hexes.length ? viewer.views(VIEW_W, VIEW_H, { margin: 0.3 }) : null;
   if (!views) return;
   await document.fonts.ready;
   const name = active?.name || 'Hexagon wall';
