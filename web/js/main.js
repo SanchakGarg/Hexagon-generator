@@ -785,6 +785,34 @@ $('png-btn').addEventListener('click', async () => {
   }
 });
 
+// AR Quick Look on iPhone and iPad: iOS finds the wall with its LiDAR and pins the build to it at actual size
+// (scaling is off), you drag it along the wall and walk round it, and its shutter button saves photos to Photos
+const arBtn = $('ar-btn');
+const canAr = document.createElement('a').relList?.supports?.('ar') ?? false;
+arBtn.hidden = $('ar-help').hidden = !canAr;
+arBtn.addEventListener('click', async () => {
+  if (!viewer || !lastLayout?.hexes.length) return;
+  const label = arBtn.textContent;
+  arBtn.disabled = true;
+  arBtn.textContent = 'Preparing…';
+  try {
+    const blob = await viewer.arModel();
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.rel = 'ar';
+    a.href = `${URL.createObjectURL(blob)}#allowsContentScaling=0`;
+    // Quick Look only takes a link with an image in it
+    a.appendChild(document.createElement('img'));
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href.split('#')[0]), 60000);
+  } catch (err) {
+    $('note').textContent = `Could not make the AR model (${err.message}).`;
+  } finally {
+    arBtn.textContent = label;
+    arBtn.disabled = false;
+  }
+});
+
 // the switch sits in the card's title row, so it must not also fold the card
 function setBoard(on) {
   boardOn = on;
@@ -1631,6 +1659,7 @@ async function startViewer() {
   svg.classList.remove('flat');
   btn3d.disabled = false;
   $('png-btn').disabled = false;
+  arBtn.disabled = false;
   wire3d(viewer.canvas);
   viewer.setShow(show);
   if (lastLayout) update();

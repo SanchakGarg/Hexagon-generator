@@ -19,11 +19,13 @@ function loadStl(url) {
 async function buildTemplate(visuals, isMcu = () => false) {
   const parts = await Promise.all(
     visuals.map(async (v) => {
-      const geometry = (await loadStl(v.url)).clone();
+      const source = await loadStl(v.url);
       const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(v.rpy[0], v.rpy[1], v.rpy[2], 'ZYX'));
-      geometry.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...v.xyz), rotation, ONE));
+      const local = new THREE.Matrix4().compose(new THREE.Vector3(...v.xyz), rotation, ONE);
+      const geometry = source.clone().applyMatrix4(local);
       const led = v.part.startsWith('led');
-      return { led, mcu: !led && isMcu(v), geometry, rgba: v.rgba, xyz: v.xyz };
+      // the STL as loaded and where it sits in the link, so the AR model can write each STL once
+      return { led, mcu: !led && isMcu(v), geometry, rgba: v.rgba, xyz: v.xyz, source, local };
     }),
   );
   const merge = (list) => (list.length ? mergeGeometries(list.map((p) => p.geometry)) : null);
@@ -1050,6 +1052,86 @@ export async function createViewer(container, geo) {
     return out;
   }
 
+  // The build as a USDZ Blob for AR Quick Look, in metres so it shows at actual size, anchored to a vertical plane:
+  // x along the wall, y up, +z out of it, centred on x and y with the back of the board at z = 0. Every part is
+  // in it at rest (no hover lift, pop or selection tint) and the wiring is left out. Each instance is its own
+  // Xform over one shared copy of its STL, so the file holds every mesh once.
+  async function arModel() {
+    if (!wallSize || !lattice || !hexMeshes.body) return null;
+    const { USDZExporter } = await import('three/addons/exporters/USDZExporter.js');
+    const made = { geometries: new Map(), materials: new Map() };
+    // position and normal only: the exporter would carry UVs and colours over for nothing
+    const plain = (geometry) => {
+      if (!made.geometries.has(geometry)) {
+        let g = new THREE.BufferGeometry();
+        g.setAttribute('position', geometry.getAttribute('position'));
+        if (geometry.getAttribute('normal')) g.setAttribute('normal', geometry.getAttribute('normal'));
+        else g.computeVertexNormals();
+        if (geometry.index) g.setIndex(geometry.index);
+        // an STL repeats each corner for every triangle on it; shared ones are written once, which is most of the file
+        g = mergeVertices(g, 1e-5);
+        made.geometries.set(geometry, g);
+      }
+      return made.geometries.get(geometry);
+    };
+    const standard = (color, { glow = false } = {}) => {
+      const key = `${color.getHexString()}${glow ? '+' : ''}`;
+      if (!made.materials.has(key)) {
+        const material = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0 });
+        if (glow) material.emissive.copy(color).multiplyScalar(0.25);
+        made.materials.set(key, material);
+      }
+      return made.materials.get(key);
+    };
+
+    const build = new THREE.Group();
+    root.updateMatrixWorld(true);
+    // one Xform per URDF visual of each placed link, all pointing at the same few STLs
+    const place = (tpl, at, bodyColor, { leds = true } = {}) => {
+      for (const part of tpl.parts) {
+        if (part.led && !leds) continue;
+        const material = part.led ? standard(palette.led, { glow: true }) : standard(part.mcu ? palette.mcu : bodyColor);
+        const mesh = new THREE.Mesh(plain(part.source), material);
+        mesh.matrixAutoUpdate = false;
+        mesh.matrix.multiplyMatrices(root.matrixWorld, at).multiply(part.local);
+        build.add(mesh);
+      }
+    };
+    const hc = lattice.hexCenter;
+    const m = new THREE.Matrix4();
+    for (const h of hexList) place(hexTpl, m.makeTranslation(h.x - hc.x, 0, h.z - hc.z), palette.hex);
+    for (const e of edgeList) place(edgeTpl, edgeMatrix(e, m), palette.hex);
+    // the drawing shows a node's body only
+    for (const n of nodeList) place(nodeTpl, nodeMatrix(n, m), palette.node[n.kind], { leds: false });
+    // the board slabs sit straight in the scene, already in world coordinates
+    for (const slab of wallObjects) {
+      slab.updateMatrixWorld(true);
+      const mesh = new THREE.Mesh(plain(slab.geometry), standard(palette.board));
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(slab.matrixWorld);
+      build.add(mesh);
+    }
+
+    const holder = new THREE.Group();
+    holder.add(build);
+    build.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(build);
+    const center = box.getCenter(new THREE.Vector3());
+    build.position.set(-center.x, -center.y, -box.min.z);
+    holder.updateMatrixWorld(true);
+
+    try {
+      const bytes = await new USDZExporter().parseAsync(holder, {
+        quickLookCompatible: true,
+        ar: { anchoring: { type: 'plane' }, planeAnchoring: { alignment: 'vertical' } },
+      });
+      return new Blob([bytes], { type: 'model/vnd.usdz+zip' });
+    } finally {
+      // the geometries share their attributes with the live templates and were never drawn, so they are left to go
+      for (const mat of made.materials.values()) mat.dispose();
+    }
+  }
+
   // --- 2D <-> 3D: fly the perspective camera between a front view that matches the flat drawing and the orbit view
 
   // the perspective view whose picture of the wall plane matches the orthographic frame
@@ -1275,5 +1357,5 @@ export async function createViewer(container, geo) {
     render();
   }
 
-  return { canvas: renderer.domElement, update, snapshot, views, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
+  return { canvas: renderer.domElement, update, snapshot, views, arModel, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
 }
