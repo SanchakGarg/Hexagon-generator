@@ -1123,7 +1123,7 @@ export async function createViewer(container, geo) {
   }
 
   // The build as a USDZ Blob for AR Quick Look, in metres so it shows at actual size, anchored to a vertical plane:
-  // x along the wall, y up, +z out of it, centred on x and y with the back of the board at z = 0. Every part is
+  // x along the wall, then turned for Quick Look (see below), centred with the back of the board on the wall. Every part is
   // in it at rest (no hover lift, pop or selection tint) and the wiring is left out. Each instance is its own
   // Xform over one shared copy of its STL, so the file holds every mesh once. { realistic } paints it as built:
   // a white board, black plates, nodes and channels, and each channel's light spilling onto the board behind it.
@@ -1203,6 +1203,9 @@ export async function createViewer(container, geo) {
       }
     }
     build.position.set(-center.x, -center.y, -box.min.z);
+    // Quick Look stands a model on a wall with its +Y out of the wall and its -Z up, so the build's front (+z)
+    // turns onto +Y and its top (+y) onto -Z; left as it is, the front faces the floor
+    holder.rotation.x = -Math.PI / 2;
     holder.updateMatrixWorld(true);
 
     try {
