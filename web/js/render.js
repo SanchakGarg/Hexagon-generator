@@ -203,9 +203,9 @@ export function dimensionSvg(d) {
   return `<path class="ext" d="${d.ext.map(seg).join(' ')}"/><path d="${seg(d.line)}"/>${d.arrows.map((h) => `<polygon points="${pts(h)}"/>`).join('')}<text x="${fmt(t.x)}" y="${fmt(t.y)}" text-anchor="middle" font-size="${fmt(t.fs)}" transform="rotate(${fmt(t.angle)} ${fmt(t.x)} ${fmt(t.y)})">${esc(t.label)}</text>`;
 }
 
-// The dimensions of one hexagon (the top-left one, which has open space above and to its left), in screen
-// coordinates and lettered the same size as the wall's: across the flats above it, corner to corner on its left,
-// one side along its upper right, and the spacing of centres, with centre marks, when it has a neighbour on its right.
+// The overall size of one hexagon (the top-left one, which has open space above and to its left), in screen
+// coordinates and lettered the same size as the wall's: its width across the flats above it, and its height
+// corner to corner on its left.
 export function hexDimensions(hexes, lat, y, formatLength, size) {
   if (!hexes.length) return null;
   const h = hexes.reduce((b, c) => (y(c.z) < y(b.z) - 1e-6 || (Math.abs(y(c.z) - y(b.z)) < 1e-6 && c.x < b.x) ? c : b));
@@ -218,15 +218,8 @@ export function hexDimensions(hexes, lat, y, formatLength, size) {
   const dims = [
     dimension({ x: cx - f, y: cy - R / 2 }, { x: cx + f, y: cy - R / 2 }, -(R / 2 + k), formatLength(lat.pitch), style),
     dimension({ x: cx, y: cy + R }, { x: cx, y: cy - R }, -(f + k), formatLength(2 * R), style),
-    dimension({ x: cx, y: cy - R }, { x: cx + f, y: cy - R / 2 }, -k, formatLength(R), style),
   ];
-  const marks = [];
-  const next = hexes.find((o) => Math.abs(o.z - h.z) < 1e-6 && Math.abs(o.x - (h.x + lat.pitch)) < lat.pitch * 0.05);
-  if (next) {
-    marks.push({ x: cx, y: cy }, { x: next.x, y: cy });
-    dims.push(dimension({ x: cx, y: cy }, { x: next.x, y: cy }, R * 0.25, formatLength(lat.pitch), style));
-  }
-  return { dims, marks, size: style.fs * 0.6, bounds: { minX: cx - f - k - style.fs * 1.5, minY: cy - R - k - style.fs * 1.5 } };
+  return { dims, bounds: { minX: cx - f - k - style.fs * 1.5, minY: cy - R - k - style.fs * 1.5 } };
 }
 
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
@@ -312,11 +305,7 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
   }
 
-  if (hd) {
-    const c = hd.size;
-    const marks = hd.marks.map((m) => `M${fmt(m.x - c)},${fmt(m.y)} L${fmt(m.x + c)},${fmt(m.y)} M${fmt(m.x)},${fmt(m.y - c)} L${fmt(m.x)},${fmt(m.y + c)}`).join(' ');
-    parts.push(`<g class="dim hexdim"><path class="mark" d="${marks}"/>${hd.dims.map(dimensionSvg).join('')}</g>`);
-  }
+  if (hd) parts.push(`<g class="dim hexdim">${hd.dims.map(dimensionSvg).join('')}</g>`);
 
   // labels page: the LED wiring, under the node labels
   if (wiring) parts.push(wiringSvg(wiring, y));

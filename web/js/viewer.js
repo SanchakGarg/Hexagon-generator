@@ -936,17 +936,14 @@ export async function createViewer(container, geo) {
     return url;
   }
 
-  // The built wall from six sides for the PNG download, each a width × height PNG data URL with every part shown
-  // and no wiring. Front, back, left and top are true orthographic projections, so dimensions can be drawn on
-  // them to scale: each carries `toPx`, taking a world point (x along the wall, y up it, z toward the viewer) to
-  // pixels, and `box`, the bounds of the build in world metres. The two from above at an angle are perspective.
+  // The build for the PNG download, each view a width × height PNG data URL with every part shown and no wiring,
+  // in front of a placeholder for the wall it hangs on: a pale W × H panel with a dashed rim. Both views are
+  // orthographic, the front a true projection and the other isometric, so dimensions can be drawn on them to
+  // scale. Each carries `toPx`, taking a world point (x along the wall, y up it, z toward the viewer) to pixels,
+  // `box`, the bounds of the build in world metres, and `wall`, the placeholder's front face.
   const VIEWS = [
     { name: 'Front', dir: [0, 0, 1], up: [0, 1, 0] },
-    { name: 'Back', dir: [0, 0, -1], up: [0, 1, 0] },
-    { name: 'Left', dir: [-1, 0, 0], up: [0, 1, 0] },
-    { name: 'Top', dir: [0, 1, 0], up: [0, 0, -1] },
-    { name: 'Upper left', dir: [-0.6, 0.45, 0.65], up: [0, 1, 0], pictorial: true },
-    { name: 'Upper right', dir: [0.6, 0.45, 0.65], up: [0, 1, 0], pictorial: true },
+    { name: 'Isometric', dir: [1, 1, 1], up: [0, 1, 0] },
   ];
   function buildBox() {
     const box = new THREE.Box3();
@@ -965,11 +962,23 @@ export async function createViewer(container, geo) {
     });
     return box;
   }
-  function views(width, height, { margin = 0.22 } = {}) {
+  function wallPlaceholder(W, H, z, depth) {
+    const group = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(W, H, depth), toon({ color: cssColor('--line') }));
+    slab.position.set(W / 2, H / 2, z - depth / 2);
+    const rim = new THREE.LineSegments(
+      new THREE.EdgesGeometry(slab.geometry),
+      new THREE.LineDashedMaterial({ color: cssColor('--muted'), dashSize: Math.max(W, H) * 0.015, gapSize: Math.max(W, H) * 0.01 }),
+    );
+    rim.computeLineDistances();
+    slab.add(rim);
+    group.add(slab);
+    return group;
+  }
+  function views(width, height, { margin = 0.2 } = {}) {
     if (!wallSize || !lattice) return null;
     const keep = { show, ratio: renderer.getPixelRatio(), ink: ink.uniforms.width.value, wiring: wiringRoot.visible };
     const keepOrtho = { pos: ortho.position.clone(), quat: ortho.quaternion.clone(), up: ortho.up.clone(), l: ortho.left, r: ortho.right, t: ortho.top, b: ortho.bottom, near: ortho.near, far: ortho.far };
-    const keepPersp = { pos: perspective.position.clone(), quat: perspective.quaternion.clone(), up: perspective.up.clone(), aspect: perspective.aspect, near: perspective.near, far: perspective.far };
     show = {};
     applyShow();
     writeNodes();
@@ -979,30 +988,23 @@ export async function createViewer(container, geo) {
     renderer.getDrawingBufferSize(ink.uniforms.resolution.value);
     ink.uniforms.width.value = 1.4 * (width / 700);
 
+    // the wall sits behind the back of the build, a little thicker than the board so it reads as a wall
     const box = buildBox();
-    const center = box.getCenter(new THREE.Vector3());
-    const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
+    const { W, H } = wallSize;
+    const depth = Math.max(W, H) * 0.025;
+    const wall = wallPlaceholder(W, H, box.min.z, depth);
+    scene.add(wall);
+    const all = box.clone().union(new THREE.Box3(new THREE.Vector3(0, 0, box.min.z - depth), new THREE.Vector3(W, H, box.min.z)));
+    const center = all.getCenter(new THREE.Vector3());
+    const radius = all.getBoundingSphere(new THREE.Sphere()).radius;
     const corners = [];
-    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+    for (const x of [all.min.x, all.max.x]) for (const y of [all.min.y, all.max.y]) for (const z of [all.min.z, all.max.z]) corners.push(new THREE.Vector3(x, y, z));
     const out = [];
     for (const v of VIEWS) {
       const dir = new THREE.Vector3(...v.dir).normalize();
-      const up = new THREE.Vector3(...v.up);
-      if (v.pictorial) {
-        const dist = (radius / Math.sin(THREE.MathUtils.degToRad(perspective.fov) / 2)) * (1 + margin * 0.4);
-        perspective.aspect = width / height;
-        perspective.up.copy(up);
-        perspective.position.copy(center).addScaledVector(dir, dist / Math.min(1, perspective.aspect));
-        perspective.near = dist / 100;
-        perspective.far = dist * 10;
-        perspective.lookAt(center);
-        perspective.updateProjectionMatrix();
-        renderer.render(scene, perspective);
-        out.push({ name: v.name, url: renderer.domElement.toDataURL('image/png'), pictorial: true });
-        continue;
-      }
-      // the view's screen axes, and the build's extent along them, padded for the dimensions and fitted to the image
-      const right = new THREE.Vector3().crossVectors(dir.clone().negate(), up).normalize();
+      // the view's screen axes, and the extent along them, padded for the dimensions and fitted to the image
+      const right = new THREE.Vector3().crossVectors(dir.clone().negate(), new THREE.Vector3(...v.up)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, dir.clone().negate()).normalize();
       const along = (p, axis) => p.dot(axis) - center.dot(axis);
       const us = corners.map((p) => along(p, right));
       const vs = corners.map((p) => along(p, up));
@@ -1025,19 +1027,19 @@ export async function createViewer(container, geo) {
         const w = new THREE.Vector3(p.x, p.y, p.z);
         return { x: width / 2 + (along(w, right) - cu) * scale, y: height / 2 - (along(w, up) - cv) * scale };
       };
-      out.push({ name: v.name, url: renderer.domElement.toDataURL('image/png'), toPx, scale, box: { min: box.min.clone(), max: box.max.clone() } });
+      out.push({ name: v.name, url: renderer.domElement.toDataURL('image/png'), toPx, scale, box: { min: box.min.clone(), max: box.max.clone() }, wall: { W, H, z: box.min.z } });
     }
 
     // back as it was
+    scene.remove(wall);
+    wall.traverse((o) => {
+      o.geometry?.dispose();
+      o.material?.dispose();
+    });
     ortho.position.copy(keepOrtho.pos);
     ortho.quaternion.copy(keepOrtho.quat);
     ortho.up.copy(keepOrtho.up);
     Object.assign(ortho, { left: keepOrtho.l, right: keepOrtho.r, top: keepOrtho.t, bottom: keepOrtho.b, near: keepOrtho.near, far: keepOrtho.far });
-    perspective.position.copy(keepPersp.pos);
-    perspective.quaternion.copy(keepPersp.quat);
-    perspective.up.copy(keepPersp.up);
-    Object.assign(perspective, { aspect: keepPersp.aspect, near: keepPersp.near, far: keepPersp.far });
-    perspective.updateProjectionMatrix();
     show = keep.show;
     applyShow();
     writeNodes();

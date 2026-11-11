@@ -67,7 +67,7 @@
           <label class="check"><input type="checkbox" id="dims-toggle" checked>Dimensions</label>
           <div class="lines" id="dims-list"></div>
           <div class="actions">
-            <button type="button" class="btn" id="png-btn" disabled title="Download the wall from six angles as PNG images">Download PNG</button>
+            <button type="button" class="btn" id="png-btn" disabled title="Download the front view with its dimensions and an isometric view, as PNG images">Download PNG</button>
           </div>
           <p class="note" id="note" role="status"></p>
         </div>
@@ -270,22 +270,6 @@
       <p class="note" id="save-error" role="alert"></p>
       <div class="actions">
         <button type="submit" class="btn primary">Save</button>
-        <button type="button" class="btn" data-close>Cancel</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog class="card dialog" id="png-dialog" aria-labelledby="png-title">
-    <form id="png-form">
-      <h2 id="png-title">Download PNG</h2>
-      <p class="help">Six views of the wall: front, back, left, top and two from above at an angle, with the dimensions drawn on.</p>
-      <fieldset class="choices">
-        <label class="check"><input type="radio" name="png-as" value="separate" checked>Separate images, one per view</label>
-        <label class="check"><input type="radio" name="png-as" value="sheet">One image with all the views</label>
-      </fieldset>
-      <p class="note" id="png-error" role="alert"></p>
-      <div class="actions">
-        <button type="submit" class="btn primary">Download</button>
         <button type="button" class="btn" data-close>Cancel</button>
       </div>
     </form>

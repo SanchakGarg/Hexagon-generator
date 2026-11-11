@@ -857,7 +857,6 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
   cursor: pointer;
 }
 .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.choices { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
 #dims-list { margin-top: 2px; }
 #dims-list .line.head { color: var(--muted); font-size: 0.95rem; margin-top: 6px; }
 

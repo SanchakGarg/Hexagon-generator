@@ -599,17 +599,15 @@ $('hide-all-btn').addEventListener('click', () => {
   applyLayers();
 });
 
-// --- page 1: the dimensions, listed and drawn, and the wall from six sides as PNGs ------------------------------
-// wall first, then one hexagon: its side, across the flats, corner to corner and the spacing of centres
+// --- page 1: the dimensions, listed and drawn, and the wall as PNGs from the front and isometric ------------------------------
+// wall first, then one hexagon's overall width (across its flats) and height (corner to corner)
 function dimRows(W, H, hexes) {
   const rows = [['Wall', null], ['Width', formatLength(W)], ['Height', formatLength(H)]];
   if (lattice && hexes.length) {
     rows.push(
       [`Hexagon (${hexes.length} placed)`, null],
-      ['Side', formatLength(lattice.R)],
-      ['Across flats', formatLength(lattice.pitch)],
-      ['Corner to corner', formatLength(2 * lattice.R)],
-      ['Centre spacing', formatLength(lattice.pitch)],
+      ['Width', formatLength(lattice.pitch)],
+      ['Height', formatLength(2 * lattice.R)],
     );
   }
   return rows;
@@ -683,8 +681,8 @@ function paintDim(ctx, d, color) {
   ctx.restore();
 }
 
-// One view on paper: the render, then for the true projections the overall size across and up the view as an
-// engineering drawing dimensions it, and on the front the hexagon's dimensions too; a title strip along the foot.
+// One view on paper: the render and, on the front, the wall's width and height on the placeholder for it and the
+// hexagon's overall size, dimensioned as an engineering drawing does; a title strip along the foot.
 async function viewCanvas(v, name) {
   const c = document.createElement('canvas');
   c.width = VIEW_W;
@@ -696,50 +694,35 @@ async function viewCanvas(v, name) {
   const ink = cssVar('--ink');
   const muted = cssVar('--muted');
   const accent = cssVar('--accent');
-  if (!v.pictorial) {
+  if (v.name === 'Front') {
     const { min, max } = v.box;
-    const px = [];
-    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) px.push(v.toPx({ x, y, z }));
-    const x0 = Math.min(...px.map((p) => p.x));
-    const x1 = Math.max(...px.map((p) => p.x));
-    const y0 = Math.min(...px.map((p) => p.y));
-    const y1 = Math.max(...px.map((p) => p.y));
-    const style = { fs: 30, a: 22, gap: 8, ext: 16 };
-    const front = v.name === 'Front' && dimsOn && lastLayout;
-    const hd = front ? hexDimensions(lastLayout.hexes, lattice, (z) => lastLayout.H - z, formatLength, Math.max(lastLayout.W, lastLayout.H)) : null;
-    // the overall dimensions stand clear of the hexagon's, which sit just outside its top-left hexagon
-    const clear = hd ? Math.max(0, x0 - v.toPx({ x: hd.bounds.minX, y: 0, z: max.z }).x) : 0;
-    const off = 60 + clear;
-    paintDim(ctx, dimension({ x: x0, y: y1 }, { x: x1, y: y1 }, 60, formatLength((x1 - x0) / v.scale), style), muted);
-    paintDim(ctx, dimension({ x: x0, y: y1 }, { x: x0, y: y0 }, -off, formatLength((y1 - y0) / v.scale), style), muted);
-    if (hd) {
-      // the hexagon dimensions come in wall metres, y down from the wall's top; the front view is the same picture
-      // scaled, so its points map through the view and its sizes scale with it
-      const zFront = max.z;
-      const map = (p) => v.toPx({ x: p.x, y: lastLayout.H - p.y, z: zFront });
-      for (const d of hd.dims) {
-        paintDim(
-          ctx,
-          {
-            ext: d.ext.map((e) => e.map(map)),
-            line: d.line.map(map),
-            arrows: d.arrows.map((h) => h.map(map)),
-            text: { ...d.text, ...map(d.text), fs: Math.max(18, d.text.fs * v.scale) },
-          },
-          accent,
-        );
-      }
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 1.5;
-      const k = hd.size * v.scale;
-      for (const m of hd.marks.map(map)) {
-        ctx.beginPath();
-        ctx.moveTo(m.x - k, m.y);
-        ctx.lineTo(m.x + k, m.y);
-        ctx.moveTo(m.x, m.y - k);
-        ctx.lineTo(m.x, m.y + k);
-        ctx.stroke();
-      }
+    const { W, H, z } = v.wall;
+    // the wall's corners on the image, and how far the build reaches past them
+    const bl = v.toPx({ x: 0, y: 0, z });
+    const tr = v.toPx({ x: W, y: H, z });
+    const reach = [v.toPx({ x: min.x, y: min.y, z }), v.toPx({ x: max.x, y: max.y, z })];
+    const left = Math.min(bl.x, ...reach.map((p) => p.x));
+    const bottom = Math.max(bl.y, ...reach.map((p) => p.y));
+    const style = { fs: 32, a: 24, gap: 8, ext: 16 };
+    const hd = dimsOn ? hexDimensions(lastLayout.hexes, lattice, (zz) => lastLayout.H - zz, formatLength, Math.max(W, H)) : null;
+    const map = (p) => v.toPx({ x: p.x, y: lastLayout.H - p.y, z: max.z });
+    // the wall's height stands clear of the hexagon's, which sits just outside its top-left hexagon
+    const clear = hd ? Math.max(0, left - map({ x: hd.bounds.minX, y: 0 }).x) : 0;
+    paintDim(ctx, dimension({ x: bl.x, y: bl.y }, { x: tr.x, y: bl.y }, bottom - bl.y + 60, formatLength(W), style), muted);
+    paintDim(ctx, dimension({ x: bl.x, y: bl.y }, { x: bl.x, y: tr.y }, -(bl.x - left + clear + 60), formatLength(H), style), muted);
+    // the hexagon dimensions come in wall metres, y down from the wall's top; the front view is the same picture
+    // scaled, so its points map through the view and its sizes scale with it
+    for (const d of hd?.dims ?? []) {
+      paintDim(
+        ctx,
+        {
+          ext: d.ext.map((e) => e.map(map)),
+          line: d.line.map(map),
+          arrows: d.arrows.map((h) => h.map(map)),
+          text: { ...d.text, ...map(d.text), fs: Math.max(22, d.text.fs * v.scale) },
+        },
+        accent,
+      );
     }
   }
   // title strip
@@ -758,40 +741,7 @@ async function viewCanvas(v, name) {
   ctx.textAlign = 'right';
   ctx.fillStyle = muted;
   ctx.font = `28px ${cssVar('--hand')}`;
-  ctx.fillText(`${name} · wall ${formatLength(lastLayout.W)} × ${formatLength(lastLayout.H)}${v.pictorial ? ' · not to scale' : ''}`, c.width - 34, c.height - 44);
-  return c;
-}
-
-// all six on one sheet, three across, under a header that lists the dimensions
-function sheetCanvas(canvases, name) {
-  const cols = 3;
-  const cw = VIEW_W / 2;
-  const ch = VIEW_H / 2;
-  const head = 170;
-  const c = document.createElement('canvas');
-  c.width = cols * cw;
-  c.height = head + Math.ceil(canvases.length / cols) * ch;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = cssVar('--page') || '#fff';
-  ctx.fillRect(0, 0, c.width, c.height);
-  canvases.forEach((v, i) => ctx.drawImage(v, (i % cols) * cw, head + Math.floor(i / cols) * ch, cw, ch));
-  ctx.fillStyle = cssVar('--ink');
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'left';
-  ctx.font = `52px ${cssVar('--hand')}`;
-  ctx.fillText(name, 30, 70);
-  const rows = dimRows(lastLayout.W, lastLayout.H, lastLayout.hexes);
-  const parts = [];
-  let group = '';
-  for (const [label, value] of rows) {
-    if (value == null) {
-      group = label;
-      parts.push({ group, items: [] });
-    } else parts.at(-1).items.push(`${label} ${value}`);
-  }
-  ctx.font = `30px ${cssVar('--hand')}`;
-  ctx.fillStyle = cssVar('--muted');
-  parts.forEach((p, i) => ctx.fillText(`${p.group}: ${p.items.join(' · ')}`, 30, 115 + i * 38));
+  ctx.fillText(`${name} · wall ${formatLength(lastLayout.W)} × ${formatLength(lastLayout.H)}`, c.width - 34, c.height - 44);
   return c;
 }
 
@@ -810,30 +760,14 @@ function download(canvas, filename) {
   );
 }
 
-const pngDialog = $('png-dialog');
-$('png-btn').addEventListener('click', () => {
-  $('png-error').textContent = '';
-  pngDialog.showModal();
-});
-for (const b of pngDialog.querySelectorAll('[data-close]')) b.addEventListener('click', () => pngDialog.close());
-pngDialog.addEventListener('click', (e) => e.target === pngDialog && pngDialog.close());
-$('png-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+// the front with its dimensions and the isometric, one file each, a moment apart so the browser takes both
+$('png-btn').addEventListener('click', async () => {
   const views = viewer && lastLayout?.hexes.length ? viewer.views(VIEW_W, VIEW_H) : null;
-  if (!views) {
-    $('png-error').textContent = 'There is no wall to draw yet.';
-    return;
-  }
-  const as = new FormData(e.target).get('png-as');
-  pngDialog.close();
+  if (!views) return;
   await document.fonts.ready;
   const name = active?.name || 'Hexagon wall';
-  const canvases = [];
-  for (const v of views) canvases.push(await viewCanvas(v, name));
-  if (as === 'sheet') return download(sheetCanvas(canvases, name), `${name} views.png`);
-  // one after another, a moment apart, so the browser takes each download
-  for (const [i, c] of canvases.entries()) {
-    await download(c, `${name} - ${views[i].name.toLowerCase()}.png`);
+  for (const v of views) {
+    await download(await viewCanvas(v, name), `${name} - ${v.name.toLowerCase()}.png`);
     await new Promise((r) => setTimeout(r, 350));
   }
 });
