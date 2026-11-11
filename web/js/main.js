@@ -789,14 +789,14 @@ $('png-btn').addEventListener('click', async () => {
 // (scaling is off), you drag it along the wall and walk round it, and its shutter button saves photos to Photos
 const arBtn = $('ar-btn');
 const canAr = document.createElement('a').relList?.supports?.('ar') ?? false;
-arBtn.hidden = $('ar-help').hidden = !canAr;
+arBtn.hidden = $('ar-help').hidden = $('ar-real-row').hidden = !canAr;
 arBtn.addEventListener('click', async () => {
   if (!viewer || !lastLayout?.hexes.length) return;
   const label = arBtn.textContent;
   arBtn.disabled = true;
   arBtn.textContent = 'Preparing…';
   try {
-    const blob = await viewer.arModel();
+    const blob = await viewer.arModel({ realistic: $('ar-real').checked });
     if (!blob) return;
     const a = document.createElement('a');
     a.rel = 'ar';

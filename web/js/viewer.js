@@ -1052,11 +1052,82 @@ export async function createViewer(container, geo) {
     return out;
   }
 
+  // the realistic AR look: a white board under black parts
+  const BLACK = new THREE.Color(0x161616);
+  const WHITE = new THREE.Color(0xf4f4f1);
+  const GLOW = { spread: 0.035, color: [255, 222, 170] }; // metres the light reaches past a channel; warm white
+
+  // A soft warm patch of light on the board under each LED channel, as a transparent self-lit quad: a rectangle
+  // the channel's size grown by GLOW.spread, opaque under the channel and fading to nothing at its rim.
+  // The channel's long side and width are the two of its STL axes that lie flat on the wall.
+  function channelGlows(channels, z) {
+    const textures = new Map();
+    const texture = (fu, fv) => {
+      const key = `${fu.toFixed(2)},${fv.toFixed(2)}`;
+      if (!textures.has(key)) {
+        const size = 128;
+        const canvas = Object.assign(document.createElement('canvas'), { width: size, height: size });
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(size, size);
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const u = (x + 0.5) / size;
+            const v = (y + 0.5) / size;
+            const dx = Math.max(fu - u, 0, u - (1 - fu)) / fu;
+            const dy = Math.max(fv - v, 0, v - (1 - fv)) / fv;
+            const a = (1 - Math.min(Math.hypot(dx, dy), 1)) ** 2;
+            const i = (y * size + x) * 4;
+            img.data.set([...GLOW.color, Math.round(a * 235)], i);
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+        const map = new THREE.CanvasTexture(canvas);
+        map.colorSpace = THREE.SRGBColorSpace;
+        textures.set(key, new THREE.MeshStandardMaterial({ color: 0xffffff, map, emissive: 0xffffff, emissiveMap: map, transparent: true, depthWrite: false, roughness: 1, metalness: 0 }));
+      }
+      return textures.get(key);
+    };
+
+    return channels.map(({ matrix, source }) => {
+      source.computeBoundingBox();
+      const { min, max } = source.boundingBox;
+      const axes = [0, 1, 2].map((i) => new THREE.Vector3().setFromMatrixColumn(matrix, i));
+      const normal = axes.reduce((best, a, i) => (Math.abs(a.z) / a.length() > Math.abs(axes[best].z) / axes[best].length() ? i : best), 0);
+      const [ia, ib] = [0, 1, 2].filter((i) => i !== normal);
+      const pad = (i) => GLOW.spread / axes[i].length();
+      const lo = min.toArray();
+      const hi = max.toArray();
+      const mid = (lo[normal] + hi[normal]) / 2;
+      const corner = (sa, sb) => {
+        const p = [0, 0, 0];
+        p[ia] = sa ? hi[ia] + pad(ia) : lo[ia] - pad(ia);
+        p[ib] = sb ? hi[ib] + pad(ib) : lo[ib] - pad(ib);
+        p[normal] = mid;
+        const w = new THREE.Vector3(...p).applyMatrix4(matrix);
+        w.z = z;
+        return w;
+      };
+      const quad = [corner(0, 0), corner(1, 0), corner(1, 1), corner(0, 1)];
+      const geometry = new THREE.BufferGeometry().setFromPoints(quad);
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+      // face out of the wall whichever way round the corners came
+      const facing = new THREE.Vector3().subVectors(quad[1], quad[0]).cross(new THREE.Vector3().subVectors(quad[2], quad[0])).z;
+      geometry.setIndex(facing > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]);
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(Array(4).fill([0, 0, 1]).flat(), 3));
+      const fu = pad(ia) / (hi[ia] - lo[ia] + 2 * pad(ia));
+      const fv = pad(ib) / (hi[ib] - lo[ib] + 2 * pad(ib));
+      const mesh = new THREE.Mesh(geometry, texture(fu, fv));
+      mesh.matrixAutoUpdate = false;
+      return mesh;
+    });
+  }
+
   // The build as a USDZ Blob for AR Quick Look, in metres so it shows at actual size, anchored to a vertical plane:
   // x along the wall, y up, +z out of it, centred on x and y with the back of the board at z = 0. Every part is
   // in it at rest (no hover lift, pop or selection tint) and the wiring is left out. Each instance is its own
-  // Xform over one shared copy of its STL, so the file holds every mesh once.
-  async function arModel() {
+  // Xform over one shared copy of its STL, so the file holds every mesh once. { realistic } paints it as built:
+  // a white board, black plates, nodes and channels, and each channel's light spilling onto the board behind it.
+  async function arModel({ realistic = false } = {}) {
     if (!wallSize || !lattice || !hexMeshes.body) return null;
     const { USDZExporter } = await import('three/addons/exporters/USDZExporter.js');
     const made = { geometries: new Map(), materials: new Map() };
@@ -1084,29 +1155,34 @@ export async function createViewer(container, geo) {
       return made.materials.get(key);
     };
 
+    const look = realistic
+      ? { hex: BLACK, mcu: BLACK, led: standard(BLACK), board: WHITE, node: () => BLACK }
+      : { hex: palette.hex, mcu: palette.mcu, led: standard(palette.led, { glow: true }), board: palette.board, node: (kind) => palette.node[kind] };
     const build = new THREE.Group();
+    const channels = []; // world matrix and STL of every LED channel, for the glow behind it
     root.updateMatrixWorld(true);
     // one Xform per URDF visual of each placed link, all pointing at the same few STLs
     const place = (tpl, at, bodyColor, { leds = true } = {}) => {
       for (const part of tpl.parts) {
         if (part.led && !leds) continue;
-        const material = part.led ? standard(palette.led, { glow: true }) : standard(part.mcu ? palette.mcu : bodyColor);
+        const material = part.led ? look.led : standard(part.mcu ? look.mcu : bodyColor);
         const mesh = new THREE.Mesh(plain(part.source), material);
         mesh.matrixAutoUpdate = false;
         mesh.matrix.multiplyMatrices(root.matrixWorld, at).multiply(part.local);
         build.add(mesh);
+        if (part.led) channels.push({ matrix: mesh.matrix.clone(), source: part.source });
       }
     };
     const hc = lattice.hexCenter;
     const m = new THREE.Matrix4();
-    for (const h of hexList) place(hexTpl, m.makeTranslation(h.x - hc.x, 0, h.z - hc.z), palette.hex);
-    for (const e of edgeList) place(edgeTpl, edgeMatrix(e, m), palette.hex);
+    for (const h of hexList) place(hexTpl, m.makeTranslation(h.x - hc.x, 0, h.z - hc.z), look.hex);
+    for (const e of edgeList) place(edgeTpl, edgeMatrix(e, m), look.hex);
     // the drawing shows a node's body only
-    for (const n of nodeList) place(nodeTpl, nodeMatrix(n, m), palette.node[n.kind], { leds: false });
+    for (const n of nodeList) place(nodeTpl, nodeMatrix(n, m), look.node(n.kind), { leds: false });
     // the board slabs sit straight in the scene, already in world coordinates
     for (const slab of wallObjects) {
       slab.updateMatrixWorld(true);
-      const mesh = new THREE.Mesh(plain(slab.geometry), standard(palette.board));
+      const mesh = new THREE.Mesh(plain(slab.geometry), standard(look.board));
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(slab.matrixWorld);
       build.add(mesh);
@@ -1117,6 +1193,15 @@ export async function createViewer(container, geo) {
     build.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(build);
     const center = box.getCenter(new THREE.Vector3());
+    // the glow lies on the board's face, or on the wall when there is no board; it is added after the box is
+    // taken, so a glow running past the board's edge doesn't move the build off centre
+    if (realistic && channels.length) {
+      const face = wallObjects.length ? new THREE.Box3().setFromObject(wallObjects[0]).max.z : box.min.z;
+      for (const glow of channelGlows(channels, face + 0.001)) {
+        made.materials.set(glow.material.uuid, glow.material);
+        build.add(glow);
+      }
+    }
     build.position.set(-center.x, -center.y, -box.min.z);
     holder.updateMatrixWorld(true);
 
@@ -1128,7 +1213,10 @@ export async function createViewer(container, geo) {
       return new Blob([bytes], { type: 'model/vnd.usdz+zip' });
     } finally {
       // the geometries share their attributes with the live templates and were never drawn, so they are left to go
-      for (const mat of made.materials.values()) mat.dispose();
+      for (const mat of made.materials.values()) {
+        mat.map?.dispose();
+        mat.dispose();
+      }
     }
   }
 
