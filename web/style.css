@@ -834,7 +834,32 @@ details[open] > .card-body { animation: unfold 0.3s cubic-bezier(0.34, 1.56, 0.6
 .dim text {
   fill: var(--muted);
   font-family: var(--hand);
+  /* a halo of paper, so a value reads where it crosses the drawing */
+  paint-order: stroke;
+  stroke: var(--page);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
+
+/* extension lines are drawn finer than the dimension line, as on a drawing sheet */
+.dim .ext { stroke-width: 0.9; }
+.dim polygon { fill: var(--muted); stroke: none; }
+.hexdim line, .hexdim path { stroke: var(--accent); }
+.hexdim text, .hexdim polygon { fill: var(--accent); }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.12rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.choices { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
+#dims-list { margin-top: 2px; }
+#dims-list .line.head { color: var(--muted); font-size: 0.95rem; margin-top: 6px; }
 
 .hex polygon,
 .node,

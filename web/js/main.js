@@ -1,6 +1,6 @@
 import { loadGeometry } from './urdf.js';
 import { deriveLattice, deriveEdge, fitWall, centerKept, buildNodes, buildEdges, buildOutline, offsetLoop, summarize, partsOf, placeAllNodes, labelHexNodes, plateFacing } from './layout.js';
-import { renderWall } from './render.js';
+import { renderWall, dimension, hexDimensions } from './render.js';
 import { buildWiring, strandPaths, channelArrows, channelJumps, buildSensors, sensorPaths, switchSettings } from './wiring.js';
 import { workbook, STYLES } from './xlsx.js';
 import { initTheme, initSections, loadSaves, storeSaves } from './prefs.js';
@@ -65,6 +65,7 @@ let lastLayout = null;
 let view = '2d';
 let viewer = null;
 let boardOn = true;
+let dimsOn = true;
 let page = 1;
 
 // hexagons are tracked by grid position, so a selection survives small wall edits
@@ -362,7 +363,7 @@ function update() {
   lastPlan = boardOn ? planSheets(rimLoops, sheetW, sheetH) : null;
   const sheets = page === SHEETS_PAGE && lastPlan ? { plan: lastPlan, loops: rimLoops } : null;
   svg.classList.toggle('labelling', !!labels);
-  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, sensors, sheets });
+  baseBox = renderWall(svg, { ...lastLayout, excluded: removed, selected: selectedIds, formatLength, picks, labels, sensors, sheets, hexDims: dimsOn && page === 1 });
   if (hoveredId && !hexes.some((h) => h.id === hoveredId)) hoveredId = null;
   if (hoveredId) svg.querySelector(`[data-hex="${hoveredId}"]`)?.classList.add('hovered');
   showHexCard(hoveredId);
@@ -392,6 +393,7 @@ function update() {
   const rim = rimLoops.flat();
   const span = (k) => Math.max(...rim.map((p) => p[k])) - Math.min(...rim.map((p) => p[k]));
   $('board-size').textContent = boardOn && rim.length ? `Board ${formatLength(span('x'))} × ${formatLength(span('z'))}` : '';
+  renderDims(W, H, hexes);
   renderBom(s, hexes, rim, lastPlan);
   renderSheets(rim, sheetW, sheetH);
   if (page === PLAYBOOK_PAGE) showPlaybook(s, hexes, edges);
@@ -595,6 +597,245 @@ $('show-all-btn').addEventListener('click', () => {
 $('hide-all-btn').addEventListener('click', () => {
   for (const l of LAYERS) show[l] = false;
   applyLayers();
+});
+
+// --- page 1: the dimensions, listed and drawn, and the wall from six sides as PNGs ------------------------------
+// wall first, then one hexagon: its side, across the flats, corner to corner and the spacing of centres
+function dimRows(W, H, hexes) {
+  const rows = [['Wall', null], ['Width', formatLength(W)], ['Height', formatLength(H)]];
+  if (lattice && hexes.length) {
+    rows.push(
+      [`Hexagon (${hexes.length} placed)`, null],
+      ['Side', formatLength(lattice.R)],
+      ['Across flats', formatLength(lattice.pitch)],
+      ['Corner to corner', formatLength(2 * lattice.R)],
+      ['Centre spacing', formatLength(lattice.pitch)],
+    );
+  }
+  return rows;
+}
+function renderDims(W, H, hexes) {
+  const list = $('dims-list');
+  list.hidden = !dimsOn;
+  list.replaceChildren(
+    ...(dimsOn ? dimRows(W, H, hexes) : []).map(([label, value]) => {
+      const p = document.createElement('p');
+      p.className = `line${value == null ? ' head' : ''}`;
+      const a = document.createElement('span');
+      a.textContent = label;
+      p.append(a);
+      if (value != null) p.append(Object.assign(document.createElement('b'), { textContent: value }));
+      return p;
+    }),
+  );
+}
+$('dims-toggle').addEventListener('change', (e) => {
+  dimsOn = e.target.checked;
+  update();
+  refreshTabStates();
+});
+
+const VIEW_W = 1600;
+const VIEW_H = 1200;
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const loadImage = (url) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+
+// one dimension from render.js's dimension(), inked onto a canvas
+function paintDim(ctx, d, color) {
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineCap = 'round';
+  const seg = ([p, q], w) => {
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+  };
+  for (const e of d.ext) seg(e, 1.2);
+  seg(d.line, 1.8);
+  for (const [a, b, c] of d.arrows) {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const t = d.text;
+  ctx.save();
+  ctx.translate(t.x, t.y);
+  ctx.rotate((t.angle * Math.PI) / 180);
+  ctx.font = `${t.fs}px ${cssVar('--hand')}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.strokeStyle = cssVar('--page');
+  ctx.lineWidth = 6;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(t.label, 0, 0);
+  ctx.fillText(t.label, 0, 0);
+  ctx.restore();
+}
+
+// One view on paper: the render, then for the true projections the overall size across and up the view as an
+// engineering drawing dimensions it, and on the front the hexagon's dimensions too; a title strip along the foot.
+async function viewCanvas(v, name) {
+  const c = document.createElement('canvas');
+  c.width = VIEW_W;
+  c.height = VIEW_H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = cssVar('--page') || '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(await loadImage(v.url), 0, 0);
+  const ink = cssVar('--ink');
+  const muted = cssVar('--muted');
+  const accent = cssVar('--accent');
+  if (!v.pictorial) {
+    const { min, max } = v.box;
+    const px = [];
+    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) px.push(v.toPx({ x, y, z }));
+    const x0 = Math.min(...px.map((p) => p.x));
+    const x1 = Math.max(...px.map((p) => p.x));
+    const y0 = Math.min(...px.map((p) => p.y));
+    const y1 = Math.max(...px.map((p) => p.y));
+    const style = { fs: 30, a: 22, gap: 8, ext: 16 };
+    const front = v.name === 'Front' && dimsOn && lastLayout;
+    const hd = front ? hexDimensions(lastLayout.hexes, lattice, (z) => lastLayout.H - z, formatLength, Math.max(lastLayout.W, lastLayout.H)) : null;
+    // the overall dimensions stand clear of the hexagon's, which sit just outside its top-left hexagon
+    const clear = hd ? Math.max(0, x0 - v.toPx({ x: hd.bounds.minX, y: 0, z: max.z }).x) : 0;
+    const off = 60 + clear;
+    paintDim(ctx, dimension({ x: x0, y: y1 }, { x: x1, y: y1 }, 60, formatLength((x1 - x0) / v.scale), style), muted);
+    paintDim(ctx, dimension({ x: x0, y: y1 }, { x: x0, y: y0 }, -off, formatLength((y1 - y0) / v.scale), style), muted);
+    if (hd) {
+      // the hexagon dimensions come in wall metres, y down from the wall's top; the front view is the same picture
+      // scaled, so its points map through the view and its sizes scale with it
+      const zFront = max.z;
+      const map = (p) => v.toPx({ x: p.x, y: lastLayout.H - p.y, z: zFront });
+      for (const d of hd.dims) {
+        paintDim(
+          ctx,
+          {
+            ext: d.ext.map((e) => e.map(map)),
+            line: d.line.map(map),
+            arrows: d.arrows.map((h) => h.map(map)),
+            text: { ...d.text, ...map(d.text), fs: Math.max(18, d.text.fs * v.scale) },
+          },
+          accent,
+        );
+      }
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.5;
+      const k = hd.size * v.scale;
+      for (const m of hd.marks.map(map)) {
+        ctx.beginPath();
+        ctx.moveTo(m.x - k, m.y);
+        ctx.lineTo(m.x + k, m.y);
+        ctx.moveTo(m.x, m.y - k);
+        ctx.lineTo(m.x, m.y + k);
+        ctx.stroke();
+      }
+    }
+  }
+  // title strip
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(14, 14, c.width - 28, c.height - 28);
+  ctx.beginPath();
+  ctx.moveTo(14, c.height - 74);
+  ctx.lineTo(c.width - 14, c.height - 74);
+  ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.font = `36px ${cssVar('--hand')}`;
+  ctx.fillText(`${v.name} view`, 34, c.height - 44);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = muted;
+  ctx.font = `28px ${cssVar('--hand')}`;
+  ctx.fillText(`${name} · wall ${formatLength(lastLayout.W)} × ${formatLength(lastLayout.H)}${v.pictorial ? ' · not to scale' : ''}`, c.width - 34, c.height - 44);
+  return c;
+}
+
+// all six on one sheet, three across, under a header that lists the dimensions
+function sheetCanvas(canvases, name) {
+  const cols = 3;
+  const cw = VIEW_W / 2;
+  const ch = VIEW_H / 2;
+  const head = 170;
+  const c = document.createElement('canvas');
+  c.width = cols * cw;
+  c.height = head + Math.ceil(canvases.length / cols) * ch;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = cssVar('--page') || '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  canvases.forEach((v, i) => ctx.drawImage(v, (i % cols) * cw, head + Math.floor(i / cols) * ch, cw, ch));
+  ctx.fillStyle = cssVar('--ink');
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.font = `52px ${cssVar('--hand')}`;
+  ctx.fillText(name, 30, 70);
+  const rows = dimRows(lastLayout.W, lastLayout.H, lastLayout.hexes);
+  const parts = [];
+  let group = '';
+  for (const [label, value] of rows) {
+    if (value == null) {
+      group = label;
+      parts.push({ group, items: [] });
+    } else parts.at(-1).items.push(`${label} ${value}`);
+  }
+  ctx.font = `30px ${cssVar('--hand')}`;
+  ctx.fillStyle = cssVar('--muted');
+  parts.forEach((p, i) => ctx.fillText(`${p.group}: ${p.items.join(' · ')}`, 30, 115 + i * 38));
+  return c;
+}
+
+function download(canvas, filename) {
+  return new Promise((resolve) =>
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      resolve();
+    }, 'image/png'),
+  );
+}
+
+const pngDialog = $('png-dialog');
+$('png-btn').addEventListener('click', () => {
+  $('png-error').textContent = '';
+  pngDialog.showModal();
+});
+for (const b of pngDialog.querySelectorAll('[data-close]')) b.addEventListener('click', () => pngDialog.close());
+pngDialog.addEventListener('click', (e) => e.target === pngDialog && pngDialog.close());
+$('png-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const views = viewer && lastLayout?.hexes.length ? viewer.views(VIEW_W, VIEW_H) : null;
+  if (!views) {
+    $('png-error').textContent = 'There is no wall to draw yet.';
+    return;
+  }
+  const as = new FormData(e.target).get('png-as');
+  pngDialog.close();
+  await document.fonts.ready;
+  const name = active?.name || 'Hexagon wall';
+  const canvases = [];
+  for (const v of views) canvases.push(await viewCanvas(v, name));
+  if (as === 'sheet') return download(sheetCanvas(canvases, name), `${name} views.png`);
+  // one after another, a moment apart, so the browser takes each download
+  for (const [i, c] of canvases.entries()) {
+    await download(c, `${name} - ${views[i].name.toLowerCase()}.png`);
+    await new Promise((r) => setTimeout(r, 350));
+  }
 });
 
 // the switch sits in the card's title row, so it must not also fold the card
@@ -947,6 +1188,7 @@ const snapshot = () => ({
   sheetW: sheetWIn.value,
   sheetH: sheetHIn.value,
   board: boardOn,
+  dims: dimsOn,
   excluded: [...excluded],
   noSensor: [...noSensor],
   show: { ...show },
@@ -966,6 +1208,8 @@ function restore(c) {
   sheetWIn.value = c.sheetW ?? inUnit(4 * FT);
   sheetHIn.value = c.sheetH ?? inUnit(5 * FT);
   setBoard(c.board !== false);
+  dimsOn = c.dims !== false;
+  $('dims-toggle').checked = dimsOn;
   for (const [set, list] of [[excluded, c.excluded], [noSensor, c.noSensor]]) {
     set.clear();
     for (const k of list ?? []) set.add(k);
@@ -1439,6 +1683,7 @@ async function startViewer() {
   }
   svg.classList.remove('flat');
   btn3d.disabled = false;
+  $('png-btn').disabled = false;
   wire3d(viewer.canvas);
   viewer.setShow(show);
   if (lastLayout) update();

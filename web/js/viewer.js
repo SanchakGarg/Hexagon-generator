@@ -936,6 +936,118 @@ export async function createViewer(container, geo) {
     return url;
   }
 
+  // The built wall from six sides for the PNG download, each a width × height PNG data URL with every part shown
+  // and no wiring. Front, back, left and top are true orthographic projections, so dimensions can be drawn on
+  // them to scale: each carries `toPx`, taking a world point (x along the wall, y up it, z toward the viewer) to
+  // pixels, and `box`, the bounds of the build in world metres. The two from above at an angle are perspective.
+  const VIEWS = [
+    { name: 'Front', dir: [0, 0, 1], up: [0, 1, 0] },
+    { name: 'Back', dir: [0, 0, -1], up: [0, 1, 0] },
+    { name: 'Left', dir: [-1, 0, 0], up: [0, 1, 0] },
+    { name: 'Top', dir: [0, 1, 0], up: [0, 0, -1] },
+    { name: 'Upper left', dir: [-0.6, 0.45, 0.65], up: [0, 1, 0], pictorial: true },
+    { name: 'Upper right', dir: [0.6, 0.45, 0.65], up: [0, 1, 0], pictorial: true },
+  ];
+  function buildBox() {
+    const box = new THREE.Box3();
+    const part = new THREE.Box3();
+    scene.updateMatrixWorld(true);
+    scene.traverseVisible((o) => {
+      if (!o.geometry || o.material === ink) return;
+      if (o.isInstancedMesh) {
+        o.computeBoundingBox();
+        part.copy(o.boundingBox);
+      } else {
+        o.geometry.computeBoundingBox();
+        part.copy(o.geometry.boundingBox);
+      }
+      box.union(part.applyMatrix4(o.matrixWorld));
+    });
+    return box;
+  }
+  function views(width, height, { margin = 0.22 } = {}) {
+    if (!wallSize || !lattice) return null;
+    const keep = { show, ratio: renderer.getPixelRatio(), ink: ink.uniforms.width.value, wiring: wiringRoot.visible };
+    const keepOrtho = { pos: ortho.position.clone(), quat: ortho.quaternion.clone(), up: ortho.up.clone(), l: ortho.left, r: ortho.right, t: ortho.top, b: ortho.bottom, near: ortho.near, far: ortho.far };
+    const keepPersp = { pos: perspective.position.clone(), quat: perspective.quaternion.clone(), up: perspective.up.clone(), aspect: perspective.aspect, near: perspective.near, far: perspective.far };
+    show = {};
+    applyShow();
+    writeNodes();
+    wiringRoot.visible = false;
+    renderer.setPixelRatio(1);
+    renderer.setSize(width, height, false);
+    renderer.getDrawingBufferSize(ink.uniforms.resolution.value);
+    ink.uniforms.width.value = 1.4 * (width / 700);
+
+    const box = buildBox();
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
+    const corners = [];
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+    const out = [];
+    for (const v of VIEWS) {
+      const dir = new THREE.Vector3(...v.dir).normalize();
+      const up = new THREE.Vector3(...v.up);
+      if (v.pictorial) {
+        const dist = (radius / Math.sin(THREE.MathUtils.degToRad(perspective.fov) / 2)) * (1 + margin * 0.4);
+        perspective.aspect = width / height;
+        perspective.up.copy(up);
+        perspective.position.copy(center).addScaledVector(dir, dist / Math.min(1, perspective.aspect));
+        perspective.near = dist / 100;
+        perspective.far = dist * 10;
+        perspective.lookAt(center);
+        perspective.updateProjectionMatrix();
+        renderer.render(scene, perspective);
+        out.push({ name: v.name, url: renderer.domElement.toDataURL('image/png'), pictorial: true });
+        continue;
+      }
+      // the view's screen axes, and the build's extent along them, padded for the dimensions and fitted to the image
+      const right = new THREE.Vector3().crossVectors(dir.clone().negate(), up).normalize();
+      const along = (p, axis) => p.dot(axis) - center.dot(axis);
+      const us = corners.map((p) => along(p, right));
+      const vs = corners.map((p) => along(p, up));
+      const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+      const pad = Math.max(u1 - u0, v1 - v0) * margin;
+      const scale = Math.min(width / (u1 - u0 + 2 * pad), height / (v1 - v0 + 2 * pad));
+      const hw = width / scale / 2;
+      const hh = height / scale / 2;
+      const cu = (u0 + u1) / 2;
+      const cv = (v0 + v1) / 2;
+      Object.assign(ortho, { left: cu - hw, right: cu + hw, top: cv + hh, bottom: cv - hh });
+      ortho.up.copy(up);
+      ortho.position.copy(center).addScaledVector(dir, radius * 4);
+      ortho.near = radius;
+      ortho.far = radius * 8;
+      ortho.lookAt(center);
+      ortho.updateProjectionMatrix();
+      renderer.render(scene, ortho);
+      const toPx = (p) => {
+        const w = new THREE.Vector3(p.x, p.y, p.z);
+        return { x: width / 2 + (along(w, right) - cu) * scale, y: height / 2 - (along(w, up) - cv) * scale };
+      };
+      out.push({ name: v.name, url: renderer.domElement.toDataURL('image/png'), toPx, scale, box: { min: box.min.clone(), max: box.max.clone() } });
+    }
+
+    // back as it was
+    ortho.position.copy(keepOrtho.pos);
+    ortho.quaternion.copy(keepOrtho.quat);
+    ortho.up.copy(keepOrtho.up);
+    Object.assign(ortho, { left: keepOrtho.l, right: keepOrtho.r, top: keepOrtho.t, bottom: keepOrtho.b, near: keepOrtho.near, far: keepOrtho.far });
+    perspective.position.copy(keepPersp.pos);
+    perspective.quaternion.copy(keepPersp.quat);
+    perspective.up.copy(keepPersp.up);
+    Object.assign(perspective, { aspect: keepPersp.aspect, near: keepPersp.near, far: keepPersp.far });
+    perspective.updateProjectionMatrix();
+    show = keep.show;
+    applyShow();
+    writeNodes();
+    wiringRoot.visible = keep.wiring;
+    ink.uniforms.width.value = keep.ink;
+    renderer.setPixelRatio(keep.ratio);
+    resize();
+    return out;
+  }
+
   // --- 2D <-> 3D: fly the perspective camera between a front view that matches the flat drawing and the orbit view
 
   // the perspective view whose picture of the wall plane matches the orthographic frame
@@ -1161,5 +1273,5 @@ export async function createViewer(container, geo) {
     render();
   }
 
-  return { canvas: renderer.domElement, update, snapshot, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
+  return { canvas: renderer.domElement, update, snapshot, views, setViewBox, setMode, setHover, setSelected, setShow, setTheme, setWiring, focusWiring, wallPoint };
 }

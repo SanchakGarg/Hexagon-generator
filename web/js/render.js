@@ -161,8 +161,76 @@ export function sensorsSvg(s, lat, y) {
   return out.join('');
 }
 
+// One linear dimension as an engineering drawing draws it, in screen coordinates (y down): extension lines leave
+// the feature points p1 and p2 a small gap off and run a little past the dimension line, which sits `offset` out
+// along the normal of p1 → p2 with an arrowhead on each extension line, and the value is centred above it, turned
+// to run along it and read from below or from the right. When the span is too short for the value, the arrows
+// point in from outside and the value goes past the p2 end.
+export function dimension(p1, p2, offset, label, { fs, a, gap, ext }) {
+  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const u = { x: (p2.x - p1.x) / len, y: (p2.y - p1.y) / len };
+  const n = { x: -u.y, y: u.x };
+  const side = Math.sign(offset) || 1;
+  const at = (p, s, t = 0) => ({ x: p.x + n.x * s + u.x * t, y: p.y + n.y * s + u.y * t });
+  const d1 = at(p1, offset);
+  const d2 = at(p2, offset);
+  const textW = String(label).length * fs * 0.48;
+  const inside = len >= a * 2.4 + textW;
+  const head = (tip, dir) => {
+    const b = { x: tip.x + u.x * a * dir, y: tip.y + u.y * a * dir };
+    return [tip, { x: b.x + n.x * a * 0.3, y: b.y + n.y * a * 0.3 }, { x: b.x - n.x * a * 0.3, y: b.y - n.y * a * 0.3 }];
+  };
+  let angle = (Math.atan2(u.y, u.x) * 180) / Math.PI;
+  if (angle > 90.01 || angle <= -90.01) angle += angle > 0 ? -180 : 180;
+  const r = (angle * Math.PI) / 180;
+  const up = { x: Math.sin(r), y: -Math.cos(r) };
+  const mid = inside ? { x: (d1.x + d2.x) / 2, y: (d1.y + d2.y) / 2 } : at(p2, offset, a * 2.6 + textW / 2);
+  return {
+    ext: [
+      [at(p1, side * gap), at(p1, offset + side * ext)],
+      [at(p2, side * gap), at(p2, offset + side * ext)],
+    ],
+    line: inside ? [d1, d2] : [at(p1, offset, -a * 2.4), at(p2, offset, a * 2.4)],
+    arrows: inside ? [head(d1, 1), head(d2, -1)] : [head(d1, -1), head(d2, 1)],
+    text: { x: mid.x + up.x * fs * 0.3, y: mid.y + up.y * fs * 0.3, angle, label: String(label), fs },
+  };
+}
+
+const pts = (list) => list.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(' ');
+export function dimensionSvg(d) {
+  const seg = ([p, q]) => `M${fmt(p.x)},${fmt(p.y)} L${fmt(q.x)},${fmt(q.y)}`;
+  const t = d.text;
+  return `<path class="ext" d="${d.ext.map(seg).join(' ')}"/><path d="${seg(d.line)}"/>${d.arrows.map((h) => `<polygon points="${pts(h)}"/>`).join('')}<text x="${fmt(t.x)}" y="${fmt(t.y)}" text-anchor="middle" font-size="${fmt(t.fs)}" transform="rotate(${fmt(t.angle)} ${fmt(t.x)} ${fmt(t.y)})">${esc(t.label)}</text>`;
+}
+
+// The dimensions of one hexagon (the top-left one, which has open space above and to its left), in screen
+// coordinates and lettered the same size as the wall's: across the flats above it, corner to corner on its left,
+// one side along its upper right, and the spacing of centres, with centre marks, when it has a neighbour on its right.
+export function hexDimensions(hexes, lat, y, formatLength, size) {
+  if (!hexes.length) return null;
+  const h = hexes.reduce((b, c) => (y(c.z) < y(b.z) - 1e-6 || (Math.abs(y(c.z) - y(b.z)) < 1e-6 && c.x < b.x) ? c : b));
+  const R = lat.R;
+  const f = lat.pitch / 2;
+  const cx = h.x;
+  const cy = y(h.z);
+  const style = { fs: size * 0.03, a: size * 0.016, gap: size * 0.006, ext: size * 0.014 };
+  const k = style.fs * 2.2; // how far each dimension line stands off the hexagon
+  const dims = [
+    dimension({ x: cx - f, y: cy - R / 2 }, { x: cx + f, y: cy - R / 2 }, -(R / 2 + k), formatLength(lat.pitch), style),
+    dimension({ x: cx, y: cy + R }, { x: cx, y: cy - R }, -(f + k), formatLength(2 * R), style),
+    dimension({ x: cx, y: cy - R }, { x: cx + f, y: cy - R / 2 }, -k, formatLength(R), style),
+  ];
+  const marks = [];
+  const next = hexes.find((o) => Math.abs(o.z - h.z) < 1e-6 && Math.abs(o.x - (h.x + lat.pitch)) < lat.pitch * 0.05);
+  if (next) {
+    marks.push({ x: cx, y: cy }, { x: next.x, y: cy });
+    dims.push(dimension({ x: cx, y: cy }, { x: next.x, y: cy }, R * 0.25, formatLength(lat.pitch), style));
+  }
+  return { dims, marks, size: style.fs * 0.6, bounds: { minX: cx - f - k - style.fs * 1.5, minY: cy - R - k - style.fs * 1.5 } };
+}
+
 // Draws the overlay in wall meters and returns its viewBox, which the mesh renderer matches.
-export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, channelJumps = null, sensors = null, sheets = null }) {
+export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], selected = new Set(), lat, formatLength, picks = null, labels = null, wiring = null, channelArrows = null, channelJumps = null, sensors = null, sheets = null, hexDims = false }) {
   const size = Math.max(W, H);
   const pad = size * 0.14;
   const fsDim = size * 0.032;
@@ -192,6 +260,12 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
     ext.minY = Math.min(ext.minY, y(c.z1));
     ext.maxY = Math.max(ext.maxY, y(c.z0));
   }
+  // page 1 with dimensions on: one hexagon dimensioned, given room above and to its left
+  const hd = hexDims ? hexDimensions(hexes, lat, y, formatLength, size) : null;
+  if (hd) {
+    ext.minX = Math.min(ext.minX, hd.bounds.minX);
+    ext.minY = Math.min(ext.minY, hd.bounds.minY);
+  }
   const viewBox = {
     x: ext.minX - pad,
     y: ext.minY - pad * 0.5,
@@ -202,22 +276,10 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   const parts = [];
   parts.push(`<rect class="wall" x="0" y="0" width="${fmt(W)}" height="${fmt(H)}"/>`);
 
-  const tick = size * 0.015;
+  const wallDim = { fs: fsDim, a: size * 0.016, gap: size * 0.006, ext: size * 0.014 };
   const dy = ext.maxY + pad * 0.45;
   const dx = ext.minX - pad * 0.45;
-  const a = tick * 0.9; // arrowhead size
-  parts.push(`<g class="dim">
-    <line x1="0" y1="${fmt(dy)}" x2="${fmt(W)}" y2="${fmt(dy)}"/>
-    <path d="M${fmt(a)},${fmt(dy - a * 0.6)} L0,${fmt(dy)} L${fmt(a)},${fmt(dy + a * 0.6)} M${fmt(W - a)},${fmt(dy - a * 0.6)} L${fmt(W)},${fmt(dy)} L${fmt(W - a)},${fmt(dy + a * 0.6)}"/>
-    <line x1="0" y1="${fmt(dy - tick)}" x2="0" y2="${fmt(dy + tick)}"/>
-    <line x1="${fmt(W)}" y1="${fmt(dy - tick)}" x2="${fmt(W)}" y2="${fmt(dy + tick)}"/>
-    <text x="${fmt(W / 2)}" y="${fmt(dy - tick * 1.4)}" text-anchor="middle" font-size="${fmt(fsDim)}">${esc(formatLength(W))}</text>
-    <line x1="${fmt(dx)}" y1="0" x2="${fmt(dx)}" y2="${fmt(H)}"/>
-    <path d="M${fmt(dx - a * 0.6)},${fmt(a)} L${fmt(dx)},0 L${fmt(dx + a * 0.6)},${fmt(a)} M${fmt(dx - a * 0.6)},${fmt(H - a)} L${fmt(dx)},${fmt(H)} L${fmt(dx + a * 0.6)},${fmt(H - a)}"/>
-    <line x1="${fmt(dx - tick)}" y1="0" x2="${fmt(dx + tick)}" y2="0"/>
-    <line x1="${fmt(dx - tick)}" y1="${fmt(H)}" x2="${fmt(dx + tick)}" y2="${fmt(H)}"/>
-    <text x="${fmt(dx - tick * 1.4)}" y="${fmt(H / 2)}" text-anchor="middle" font-size="${fmt(fsDim)}" transform="rotate(-90 ${fmt(dx - tick * 1.4)} ${fmt(H / 2)})">${esc(formatLength(H))}</text>
-  </g>`);
+  parts.push(`<g class="dim">${dimensionSvg(dimension({ x: 0, y: H }, { x: W, y: H }, dy - H, formatLength(W), wallDim))}${dimensionSvg(dimension({ x: 0, y: H }, { x: 0, y: 0 }, dx, formatLength(H), wallDim))}</g>`);
 
   // the sheets page: the board shaded, and each sheet over it as a dashed box with its number
   if (sheets) {
@@ -248,6 +310,12 @@ export function renderWall(svg, { W, H, hexes, nodes, edges, excluded = [], sele
   for (const e of edges) parts.push(`<polygon class="edge" points="${stripPoints(e.x, y(e.z), e.tipX, y(e.tipZ), half)}"/>`);
   for (const n of nodes) {
     parts.push(`<polygon class="node node-${n.kind.replace('-', '')}" points="${hexPoints(n.x, y(n.z), nodeR, n.rotation)}"/>`);
+  }
+
+  if (hd) {
+    const c = hd.size;
+    const marks = hd.marks.map((m) => `M${fmt(m.x - c)},${fmt(m.y)} L${fmt(m.x + c)},${fmt(m.y)} M${fmt(m.x)},${fmt(m.y - c)} L${fmt(m.x)},${fmt(m.y + c)}`).join(' ');
+    parts.push(`<g class="dim hexdim"><path class="mark" d="${marks}"/>${hd.dims.map(dimensionSvg).join('')}</g>`);
   }
 
   // labels page: the LED wiring, under the node labels
